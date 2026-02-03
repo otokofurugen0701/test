@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quadrant Todo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Quadrant Todo</h1>
+        <p>Personal todo list with importance and urgency.</p>
+      </div>
+      <div class="summary">
+        <div><span id="count-open">0</span> open</div>
+        <div><span id="count-due-today">0</span> due today</div>
+        <div><span id="count-overdue">0</span> overdue</div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel" aria-labelledby="task-form-title">
+        <h2 id="task-form-title">Add / edit task</h2>
+        <form id="task-form" novalidate>
+          <div class="field">
+            <label for="title">Title</label>
+            <input
+              id="title"
+              name="title"
+              type="text"
+              required
+              maxlength="120"
+              autocomplete="off"
+            />
+          </div>
+          <div class="field">
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes" rows="3" maxlength="500"></textarea>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="dueDate">Due date</label>
+              <input id="dueDate" name="dueDate" type="date" />
+            </div>
+            <div class="field">
+              <label for="importance">
+                Importance <span id="importance-value" class="value">3</span>
+              </label>
+              <input
+                id="importance"
+                name="importance"
+                type="range"
+                min="1"
+                max="5"
+                value="3"
+              />
+            </div>
+            <div class="field">
+              <label for="urgency">
+                Urgency <span id="urgency-value" class="value">3</span>
+              </label>
+              <input
+                id="urgency"
+                name="urgency"
+                type="range"
+                min="1"
+                max="5"
+                value="3"
+              />
+            </div>
+          </div>
+          <div class="actions">
+            <button type="submit" id="submit-button">Add task</button>
+            <button type="button" id="cancel-edit" class="secondary" hidden>
+              Cancel edit
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="today-title">
+        <div class="panel-header">
+          <h2 id="today-title">Today</h2>
+          <button type="button" id="clear-completed" class="secondary">
+            Clear completed
+          </button>
+        </div>
+        <ul id="today-list" class="list"></ul>
+        <p id="today-empty" class="empty">No tasks due today.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="list-title">
+        <h2 id="list-title">All tasks</h2>
+        <ul id="task-list" class="list"></ul>
+        <p id="list-empty" class="empty">No tasks yet.</p>
+      </section>
+
+      <section class="panel panel-wide" aria-labelledby="quadrant-title">
+        <h2 id="quadrant-title">Importance vs urgency (4 quadrants)</h2>
+        <div class="matrix">
+          <div class="quadrant">
+            <div class="quadrant-title">Do now (high/high)</div>
+            <div
+              class="dropzone"
+              data-importance="high"
+              data-urgency="high"
+            ></div>
+          </div>
+          <div class="quadrant">
+            <div class="quadrant-title">Plan (high/low)</div>
+            <div
+              class="dropzone"
+              data-importance="high"
+              data-urgency="low"
+            ></div>
+          </div>
+          <div class="quadrant">
+            <div class="quadrant-title">Handle quickly (low/high)</div>
+            <div
+              class="dropzone"
+              data-importance="low"
+              data-urgency="high"
+            ></div>
+          </div>
+          <div class="quadrant">
+            <div class="quadrant-title">Later (low/low)</div>
+            <div class="dropzone" data-importance="low" data-urgency="low"></div>
+          </div>
+        </div>
+        <p class="hint">
+          Drag tasks between quadrants to update importance and urgency.
+        </p>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <small>Saved locally in your browser.</small>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
