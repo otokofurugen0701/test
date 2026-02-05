@@ -61,6 +61,30 @@ npm run dev
 ブラウザで http://localhost:3000 を開きます。  
 リモート環境の場合はポートフォワード先のURLを利用してください。
 
+### 常駐起動（PM2）
+
+開発用に常駐させたい場合は PM2 を利用できます。
+
+```bash
+npm run pm2:dev
+```
+
+ログ確認:
+```bash
+npm run pm2:logs
+```
+
+停止:
+```bash
+npm run pm2:stop
+```
+
+本番相当で起動する場合はビルド後に:
+```bash
+npm run build
+npm run pm2:prod
+```
+
 ## 初期ログイン情報（seed）
 
 - 管理者: `admin@smagomi.local` / `password123`

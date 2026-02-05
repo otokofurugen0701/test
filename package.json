@@ -13,7 +13,12 @@
     "seed": "prisma db seed",
     "postinstall": "prisma generate",
     "db:up": "docker compose up -d",
-    "db:down": "docker compose down -v"
+    "db:down": "docker compose down -v",
+    "pm2:dev": "pm2 start ecosystem.config.cjs --only smagomi-dev",
+    "pm2:prod": "pm2 start ecosystem.config.cjs --only smagomi-prod",
+    "pm2:stop": "pm2 stop smagomi-dev smagomi-prod",
+    "pm2:delete": "pm2 delete smagomi-dev smagomi-prod",
+    "pm2:logs": "pm2 logs smagomi-dev"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.3.0",
@@ -23,6 +28,7 @@
     "next": "16.1.6",
     "next-auth": "^4.24.13",
     "pg": "^8.18.0",
+    "pm2": "^6.0.14",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
