@@ -135,6 +135,32 @@ sudo systemctl enable --now smagomi-prod
 sudo systemctl status smagomi-prod
 ```
 
+### Nginx リバースプロキシ + HTTPS（Let's Encrypt）
+
+1) Nginx と Certbot をインストールします。
+```bash
+sudo apt-get update
+sudo apt-get install -y nginx certbot python3-certbot-nginx
+```
+
+2) Nginx 設定を配置し、ドメインを差し替えます。
+```bash
+sudo cp deploy/nginx/smagomi.conf /etc/nginx/sites-available/smagomi.conf
+sudo sed -i "s/smagomi.example.com/<your-domain>/" /etc/nginx/sites-available/smagomi.conf
+sudo ln -s /etc/nginx/sites-available/smagomi.conf /etc/nginx/sites-enabled/smagomi.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+3) 証明書を発行します。
+```bash
+sudo certbot --nginx -d <your-domain>
+```
+
+4) 80/443 が開いていることを確認してください。
+
+> 証明書発行前に 443 ブロックがエラーになる場合は、一時的に 443 の server ブロックをコメントアウトしてください。
+
 ## 初期ログイン情報（seed）
 
 - 管理者: `admin@smagomi.local` / `password123`
