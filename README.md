@@ -110,6 +110,31 @@ sudo systemctl enable --now smagomi
 sudo systemctl status smagomi
 ```
 
+### systemd（本番モード）
+
+本番用は `smagomi-prod.service` を利用します。
+
+```bash
+# 1) ビルドして PM2 で本番起動
+npm run build
+npm run pm2:prod
+pm2 save
+
+# 2) systemd unit を配置
+sudo cp deploy/systemd/smagomi-prod.service /etc/systemd/system/smagomi-prod.service
+
+# 3) ユーザー名/作業ディレクトリを環境に合わせて修正
+sudo sed -i "s/User=ubuntu/User=<your-user>/" /etc/systemd/system/smagomi-prod.service
+sudo sed -i "s#WorkingDirectory=/workspace#WorkingDirectory=<your-path>#" /etc/systemd/system/smagomi-prod.service
+
+# 4) 有効化
+sudo systemctl daemon-reload
+sudo systemctl enable --now smagomi-prod
+
+# ステータス確認
+sudo systemctl status smagomi-prod
+```
+
 ## 初期ログイン情報（seed）
 
 - 管理者: `admin@smagomi.local` / `password123`
