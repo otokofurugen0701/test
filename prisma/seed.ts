@@ -1,7 +1,21 @@
-import { PrismaClient, Role, AlertStatus, AlertType, AlertSeverity, TaskStatus, TaskType, DeviceStatus } from "@prisma/client";
+import {
+  PrismaClient,
+  Role,
+  AlertStatus,
+  AlertType,
+  AlertSeverity,
+  TaskStatus,
+  TaskType,
+  DeviceStatus,
+} from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({
+  adapter: new PrismaPg(pool),
+});
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000);
 const daysAgo = (d: number) => new Date(Date.now() - d * 24 * 60 * 60 * 1000);
