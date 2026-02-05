@@ -174,6 +174,22 @@ sudo systemctl reload nginx
 
 Rate limit や同時接続数は環境に合わせて調整してください。
 
+### Nginx WAF相当ルール + JSONログ
+
+簡易WAFルールとJSON形式のアクセスログを有効にする場合は
+`smagomi-waf.conf` を利用します。
+
+```bash
+sudo cp deploy/nginx/smagomi-waf.conf /etc/nginx/sites-available/smagomi.conf
+sudo sed -i "s/smagomi.example.com/<your-domain>/" /etc/nginx/sites-available/smagomi.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+JSONログは以下に出力されます。
+- `/var/log/nginx/smagomi-access.json`
+- `/var/log/nginx/smagomi-error.log`
+
 ## 初期ログイン情報（seed）
 
 - 管理者: `admin@smagomi.local` / `password123`
