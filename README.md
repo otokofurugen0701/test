@@ -161,6 +161,19 @@ sudo certbot --nginx -d <your-domain>
 
 > 証明書発行前に 443 ブロックがエラーになる場合は、一時的に 443 の server ブロックをコメントアウトしてください。
 
+### Nginx 運用強化版（HSTS / Rate Limit / セキュリティヘッダ）
+
+より堅牢な設定を使う場合は `smagomi-hardening.conf` を利用します。
+
+```bash
+sudo cp deploy/nginx/smagomi-hardening.conf /etc/nginx/sites-available/smagomi.conf
+sudo sed -i "s/smagomi.example.com/<your-domain>/" /etc/nginx/sites-available/smagomi.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Rate limit や同時接続数は環境に合わせて調整してください。
+
 ## 初期ログイン情報（seed）
 
 - 管理者: `admin@smagomi.local` / `password123`
