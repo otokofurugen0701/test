@@ -1,0 +1,22 @@
+[sources.nginx_smagomi]
+type = "file"
+include = ["/var/log/nginx/smagomi-access.json"]
+read_from = "beginning"
+
+[transforms.parse_json]
+type = "remap"
+inputs = ["nginx_smagomi"]
+source = '''
+. = parse_json!(.message)
+'''
+
+[sinks.local_file]
+type = "file"
+inputs = ["parse_json"]
+path = "/var/log/vector/smagomi-access.ndjson"
+encoding.codec = "json"
+
+[sinks.stdout]
+type = "console"
+inputs = ["parse_json"]
+encoding.codec = "json"

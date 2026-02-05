@@ -190,6 +190,38 @@ JSONログは以下に出力されます。
 - `/var/log/nginx/smagomi-access.json`
 - `/var/log/nginx/smagomi-error.log`
 
+### Fail2ban 連携（簡易WAF）
+
+Nginx の JSONログ（`smagomi-access.json`）を使って
+403/405/400 を一定回数超えたIPをブロックします。
+
+```bash
+sudo apt-get install -y fail2ban
+sudo cp deploy/fail2ban/filter.d/nginx-smagomi.conf /etc/fail2ban/filter.d/nginx-smagomi.conf
+sudo cp deploy/fail2ban/jail.local /etc/fail2ban/jail.d/nginx-smagomi.local
+sudo systemctl restart fail2ban
+sudo fail2ban-client status nginx-smagomi
+```
+
+> 監視対象のログは `smagomi-waf.conf` を使っている場合のみ出力されます。
+
+### ログ収集（Vector）
+
+Vector を使って JSONログをパースし、別ファイルへ整形保存します。
+
+```bash
+curl -1sLf https://setup.vector.dev | sudo -E bash
+sudo apt-get install -y vector
+sudo mkdir -p /var/log/vector
+sudo cp deploy/vector/vector.toml /etc/vector/vector.toml
+sudo cp deploy/systemd/vector.service /etc/systemd/system/vector.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now vector
+sudo systemctl status vector
+```
+
+出力先: `/var/log/vector/smagomi-access.ndjson`
+
 ## 初期ログイン情報（seed）
 
 - 管理者: `admin@smagomi.local` / `password123`
