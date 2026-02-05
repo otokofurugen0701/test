@@ -58,7 +58,8 @@ npm run seed
 npm run dev
 ```
 
-ブラウザで http://localhost:3000 を開きます。
+ブラウザで http://localhost:3000 を開きます。  
+リモート環境の場合はポートフォワード先のURLを利用してください。
 
 ## 初期ログイン情報（seed）
 
