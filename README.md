@@ -85,6 +85,31 @@ npm run build
 npm run pm2:prod
 ```
 
+### systemd で自動起動（推奨）
+
+PM2 で起動したプロセスを systemd で自動起動させる場合は、
+`deploy/systemd/smagomi.service` を利用できます。
+
+```bash
+# 1) PM2 起動（初回のみ）
+npm run pm2:dev
+pm2 save
+
+# 2) systemd unit を配置
+sudo cp deploy/systemd/smagomi.service /etc/systemd/system/smagomi.service
+
+# 3) ユーザー名/作業ディレクトリを環境に合わせて修正
+sudo sed -i "s/User=ubuntu/User=<your-user>/" /etc/systemd/system/smagomi.service
+sudo sed -i "s#WorkingDirectory=/workspace#WorkingDirectory=<your-path>#" /etc/systemd/system/smagomi.service
+
+# 4) 有効化
+sudo systemctl daemon-reload
+sudo systemctl enable --now smagomi
+
+# ステータス確認
+sudo systemctl status smagomi
+```
+
 ## 初期ログイン情報（seed）
 
 - 管理者: `admin@smagomi.local` / `password123`
