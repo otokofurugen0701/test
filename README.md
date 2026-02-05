@@ -21,22 +21,38 @@ Next.js (App Router) + Prisma + PostgreSQL + NextAuth (Credentials) 構成で、
 cp .env.example .env
 ```
 
-`.env` を編集し、PostgreSQL と NextAuth を設定します。
+`.env` を編集し、PostgreSQL と NextAuth を設定します。  
+Prisma のマイグレーション用に `SHADOW_DATABASE_URL` も必要です。
 
-### 2) 依存関係
+### 2) PostgreSQL（Docker 推奨）
+
+Docker が使える場合は以下でDBを起動できます。
+
+```bash
+npm run db:up
+```
+
+初回起動時に `smagomi` と `smagomi_shadow` が作成されます。  
+停止・削除は以下です。
+
+```bash
+npm run db:down
+```
+
+### 3) 依存関係
 
 ```bash
 npm install
 ```
 
-### 3) マイグレーション & シード
+### 4) マイグレーション & シード
 
 ```bash
 npx prisma migrate dev --name init
 npm run seed
 ```
 
-### 4) 起動
+### 5) 起動
 
 ```bash
 npm run dev
