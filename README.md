@@ -85,6 +85,14 @@ npm run build
 npm run pm2:prod
 ```
 
+### 自動起動スクリプト（開発用）
+
+DB起動 → migrate → seed → PM2起動 を一括で実行します。
+
+```bash
+npm run bootstrap:dev
+```
+
 ### systemd で自動起動（推奨）
 
 PM2 で起動したプロセスを systemd で自動起動させる場合は、
