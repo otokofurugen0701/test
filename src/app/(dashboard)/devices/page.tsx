@@ -87,6 +87,10 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
       deviceCode: device.deviceCode,
       siteName: device.site?.name ?? null,
       address: device.site?.address ?? null,
+      siteId: device.siteId ?? null,
+      responsibleUserId: device.responsibleUserId ?? null,
+      notes: device.notes ?? null,
+      deviceStatus: device.status,
       lat: device.site!.lat!,
       lng: device.site!.lng!,
       status: offline ? "offline" : full ? "full" : lowBattery ? "low_battery" : "ok",
@@ -173,7 +177,11 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
 
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-slate-900">デバイス位置マップ</h3>
-        <DeviceMapPanel devices={mapPoints} />
+        <DeviceMapPanel
+          devices={mapPoints}
+          sites={sites.map((site) => ({ id: site.id, name: site.name }))}
+          users={users.map((user) => ({ id: user.id, name: user.name ?? user.email }))}
+        />
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
