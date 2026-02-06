@@ -2,8 +2,15 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/telemetry/ingest"];
-const ADMIN_ONLY_PATHS = ["/users", "/settings", "/api/users", "/api/settings"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/telemetry/ingest", "/api/cron/offline-sync"];
+const ADMIN_ONLY_PATHS = [
+  "/users",
+  "/settings",
+  "/audit-logs",
+  "/api/users",
+  "/api/settings",
+  "/api/audit-logs",
+];
 
 const isPublic = (pathname: string) =>
   PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

@@ -19,7 +19,7 @@ export function Sidebar() {
   const isAdmin = session?.user.role === "ADMIN";
 
   const links = isAdmin
-    ? [...baseLinks, { href: "/users", label: "Users" }]
+    ? [...baseLinks, { href: "/users", label: "Users" }, { href: "/audit-logs", label: "Audit Logs" }]
     : baseLinks.filter((link) => link.href !== "/settings");
 
   return (

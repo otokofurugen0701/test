@@ -262,6 +262,15 @@ curl -X POST "http://localhost:3000/api/telemetry/ingest" \
 
 > `deviceCode` は seed データの `SMG-0001 / SMG-0002` を利用できます。
 
+## オフライン同期（cron 例）
+
+オフライン判定は定期的に実行することで常に最新化できます。
+
+```bash
+curl -X POST "http://localhost:3000/api/cron/offline-sync" \
+  -H "x-api-key: smagomi-cron-key"
+```
+
 ## 備考
 
 - オフライン判定は `Settings` で変更可能です（デフォルト30分）。
