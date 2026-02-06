@@ -2,7 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
 import { formatDateTime, formatPct } from "@/lib/format";
-import { DeviceMap } from "@/components/DeviceMap";
+import { DeviceMapPanel } from "@/components/DeviceMapPanel";
+import { DeviceCreateForm } from "@/components/DeviceCreateForm";
 import type { DeviceStatus, Prisma } from "@prisma/client";
 
 type DevicesPageProps = {
@@ -18,7 +19,10 @@ type DevicesPageProps = {
 
 export default async function DevicesPage({ searchParams }: DevicesPageProps) {
   const baseThresholds = await getThresholds();
-  const sites = await prisma.site.findMany({ orderBy: { name: "asc" } });
+  const [sites, users] = await Promise.all([
+    prisma.site.findMany({ orderBy: { name: "asc" } }),
+    prisma.user.findMany({ orderBy: { name: "asc" } }),
+  ]);
 
   const where: Prisma.DeviceWhereInput = {};
   const andFilters: Prisma.DeviceWhereInput[] = [];
@@ -70,11 +74,19 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
   };
 
   const mapPoints = filtered
-    .filter(({ device }) => device.site?.lat !== null && device.site?.lat !== undefined && device.site?.lng !== null && device.site?.lng !== undefined)
+    .filter(
+      ({ device }) =>
+        device.site?.lat !== null &&
+        device.site?.lat !== undefined &&
+        device.site?.lng !== null &&
+        device.site?.lng !== undefined
+    )
     .map(({ device, full, lowBattery, offline }) => ({
       id: device.id,
       name: device.name,
       deviceCode: device.deviceCode,
+      siteName: device.site?.name ?? null,
+      address: device.site?.address ?? null,
       lat: device.site!.lat!,
       lng: device.site!.lng!,
       status: offline ? "offline" : full ? "full" : lowBattery ? "low_battery" : "ok",
@@ -100,6 +112,11 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
           </div>
         ))}
       </div>
+
+      <DeviceCreateForm
+        sites={sites.map((site) => ({ id: site.id, name: site.name }))}
+        users={users.map((user) => ({ id: user.id, name: user.name ?? user.email }))}
+      />
 
       <form className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="grid gap-4 md:grid-cols-6">
@@ -156,7 +173,7 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
 
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-slate-900">デバイス位置マップ</h3>
-        <DeviceMap devices={mapPoints} />
+        <DeviceMapPanel devices={mapPoints} />
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">

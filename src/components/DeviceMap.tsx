@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
 
 type DeviceMapPoint = {
   id: string;
   name: string;
   deviceCode: string;
+  siteName?: string | null;
+  address?: string | null;
   lat: number;
   lng: number;
   status: "ok" | "full" | "low_battery" | "offline";
@@ -15,6 +16,8 @@ type DeviceMapPoint = {
 
 type DeviceMapProps = {
   devices: DeviceMapPoint[];
+  onSelect?: (device: DeviceMapPoint) => void;
+  onClear?: () => void;
 };
 
 type DeviceGeoJson = {
@@ -26,6 +29,8 @@ type DeviceGeoJson = {
       name: string;
       deviceCode: string;
       status: DeviceMapPoint["status"];
+      siteName?: string;
+      address?: string;
     };
     geometry: {
       type: "Point";
@@ -36,10 +41,25 @@ type DeviceGeoJson = {
 
 const DEFAULT_CENTER: [number, number] = [139.6917, 35.6895];
 
-export function DeviceMap({ devices }: DeviceMapProps) {
+export function DeviceMap({ devices, onSelect, onClear }: DeviceMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const devicesRef = useRef<DeviceMapPoint[]>(devices);
+  const onSelectRef = useRef<DeviceMapProps["onSelect"]>(undefined);
+  const onClearRef = useRef<DeviceMapProps["onClear"]>(undefined);
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+  useEffect(() => {
+    devicesRef.current = devices;
+  }, [devices]);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    onClearRef.current = onClear;
+  }, [onClear]);
 
   const geojson: DeviceGeoJson = useMemo(
     () => ({
@@ -51,6 +71,8 @@ export function DeviceMap({ devices }: DeviceMapProps) {
           name: device.name,
           deviceCode: device.deviceCode,
           status: device.status,
+          siteName: device.siteName ?? "",
+          address: device.address ?? "",
         },
         geometry: {
           type: "Point",
@@ -148,7 +170,26 @@ export function DeviceMap({ devices }: DeviceMapProps) {
       map.on("click", "unclustered-point", (event) => {
         const feature = event.features?.[0];
         if (!feature) return;
-        const props = feature.properties as { id: string; name: string; deviceCode: string };
+        const props = feature.properties as {
+          id: string;
+          name: string;
+          deviceCode: string;
+          status: DeviceMapPoint["status"];
+          siteName?: string;
+          address?: string;
+        };
+        const selected =
+          devicesRef.current.find((device) => device.id === props.id) ?? {
+            id: props.id,
+            name: props.name,
+            deviceCode: props.deviceCode,
+            siteName: props.siteName,
+            address: props.address,
+            lat: (feature.geometry as { coordinates: [number, number] }).coordinates[1],
+            lng: (feature.geometry as { coordinates: [number, number] }).coordinates[0],
+            status: props.status,
+          };
+        onSelectRef.current?.(selected);
         const [lng, lat] = (feature.geometry as { coordinates: [number, number] }).coordinates;
         new mapboxgl.Popup({ offset: 12 })
           .setLngLat([lng, lat])
@@ -160,6 +201,13 @@ export function DeviceMap({ devices }: DeviceMapProps) {
             </div>`
           )
           .addTo(map);
+      });
+
+      map.on("click", (event) => {
+        const hits = map.queryRenderedFeatures(event.point, { layers: ["unclustered-point"] });
+        if (hits.length === 0) {
+          onClearRef.current?.();
+        }
       });
 
       map.on("mouseenter", "clusters", () => {
