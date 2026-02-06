@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { getThresholds, isOffline } from "@/lib/settings";
+import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
 import { upsertThresholdAlert, syncOfflineAlert } from "@/lib/alerting";
 import { AlertSeverity, AlertType } from "@prisma/client";
 
@@ -41,7 +41,10 @@ export async function POST(request: NextRequest) {
   }
 
   const data = parsed.data;
-  const device = await prisma.device.findUnique({ where: { deviceCode: data.deviceCode } });
+  const device = await prisma.device.findUnique({
+    where: { deviceCode: data.deviceCode },
+    include: { site: true },
+  });
 
   if (!device) {
     return NextResponse.json({ error: "Device not found" }, { status: 404 });
@@ -79,7 +82,8 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  const thresholds = await getThresholds();
+  const baseThresholds = await getThresholds();
+  const thresholds = resolveThresholds(baseThresholds, [device.site ?? {}, device]);
 
   if (fillLevelPct !== null) {
     await upsertThresholdAlert({

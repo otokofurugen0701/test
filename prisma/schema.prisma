@@ -59,37 +59,43 @@ model User {
 }
 
 model Site {
-  id        String    @id @default(cuid())
-  name      String
-  address   String?
-  lat       Float?
-  lng       Float?
-  notes     String?
-  createdAt DateTime  @default(now())
-  devices   Device[]
+  id                       String    @id @default(cuid())
+  name                     String
+  address                  String?
+  lat                      Float?
+  lng                      Float?
+  notes                    String?
+  fullThresholdOverride    Int?
+  lowBatteryThresholdOverride Int?
+  offlineMinutesOverride   Int?
+  createdAt                DateTime  @default(now())
+  devices                  Device[]
 }
 
 model Device {
-  id                String        @id @default(cuid())
-  deviceCode        String        @unique
-  name              String
-  siteId            String?
-  site              Site?         @relation(fields: [siteId], references: [id])
-  installedAt       DateTime?
-  status            DeviceStatus  @default(ACTIVE)
-  lastSeenAt        DateTime?
-  lastFillLevelPct  Int?
-  lastBatteryPct    Int?
-  lastDoorOpen      Boolean?
-  lastTempC         Float?
-  lastRssi          Float?
-  responsibleUserId String?
-  responsibleUser   User?         @relation("DeviceOwner", fields: [responsibleUserId], references: [id])
-  notes             String?
-  telemetry         Telemetry[]
-  alerts            Alert[]
-  tasks             Task[]
-  createdAt         DateTime      @default(now())
+  id                       String        @id @default(cuid())
+  deviceCode               String        @unique
+  name                     String
+  siteId                   String?
+  site                     Site?         @relation(fields: [siteId], references: [id])
+  installedAt              DateTime?
+  status                   DeviceStatus  @default(ACTIVE)
+  lastSeenAt               DateTime?
+  lastFillLevelPct         Int?
+  lastBatteryPct           Int?
+  lastDoorOpen             Boolean?
+  lastTempC                Float?
+  lastRssi                 Float?
+  responsibleUserId        String?
+  responsibleUser          User?         @relation("DeviceOwner", fields: [responsibleUserId], references: [id])
+  notes                    String?
+  fullThresholdOverride    Int?
+  lowBatteryThresholdOverride Int?
+  offlineMinutesOverride   Int?
+  telemetry                Telemetry[]
+  alerts                   Alert[]
+  tasks                    Task[]
+  createdAt                DateTime      @default(now())
 }
 
 model Telemetry {

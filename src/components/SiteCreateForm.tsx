@@ -11,6 +11,9 @@ export function SiteCreateForm() {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [notes, setNotes] = useState("");
+  const [fullThresholdOverride, setFullThresholdOverride] = useState("");
+  const [lowBatteryThresholdOverride, setLowBatteryThresholdOverride] = useState("");
+  const [offlineMinutesOverride, setOfflineMinutesOverride] = useState("");
 
   const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -25,6 +28,9 @@ export function SiteCreateForm() {
           lat: lat ? Number(lat) : null,
           lng: lng ? Number(lng) : null,
           notes: notes || null,
+          fullThresholdOverride: fullThresholdOverride ? Number(fullThresholdOverride) : null,
+          lowBatteryThresholdOverride: lowBatteryThresholdOverride ? Number(lowBatteryThresholdOverride) : null,
+          offlineMinutesOverride: offlineMinutesOverride ? Number(offlineMinutesOverride) : null,
         }),
       });
       setName("");
@@ -32,6 +38,9 @@ export function SiteCreateForm() {
       setLat("");
       setLng("");
       setNotes("");
+      setFullThresholdOverride("");
+      setLowBatteryThresholdOverride("");
+      setOfflineMinutesOverride("");
       router.refresh();
     });
   };
@@ -69,6 +78,34 @@ export function SiteCreateForm() {
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
           placeholder="メモ"
+          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+        />
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <input
+          value={fullThresholdOverride}
+          onChange={(event) => setFullThresholdOverride(event.target.value)}
+          placeholder="満杯しきい値(%)"
+          type="number"
+          min={0}
+          max={100}
+          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+        />
+        <input
+          value={lowBatteryThresholdOverride}
+          onChange={(event) => setLowBatteryThresholdOverride(event.target.value)}
+          placeholder="電池低下しきい値(%)"
+          type="number"
+          min={0}
+          max={100}
+          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+        />
+        <input
+          value={offlineMinutesOverride}
+          onChange={(event) => setOfflineMinutesOverride(event.target.value)}
+          placeholder="オフライン判定(分)"
+          type="number"
+          min={1}
           className="rounded-md border border-slate-300 px-3 py-2 text-sm"
         />
       </div>

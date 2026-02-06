@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { getThresholds, isOffline } from "@/lib/settings";
+import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
 import { formatDateTime, formatPct, formatTemperature } from "@/lib/format";
 import { TelemetryCharts } from "@/components/TelemetryCharts";
+import { DeviceEditForm } from "@/components/DeviceEditForm";
 
 export default async function DeviceDetailPage({ params }: { params: { id: string } }) {
   const device = await prisma.device.findUnique({
@@ -17,7 +18,8 @@ export default async function DeviceDetailPage({ params }: { params: { id: strin
 
   if (!device) return notFound();
 
-  const thresholds = await getThresholds();
+  const baseThresholds = await getThresholds();
+  const thresholds = resolveThresholds(baseThresholds, [device.site ?? {}, device]);
   const isDeviceOffline = isOffline(device.lastSeenAt, thresholds.offlineMinutes);
   const isFull =
     device.lastFillLevelPct !== null &&
@@ -30,7 +32,7 @@ export default async function DeviceDetailPage({ params }: { params: { id: strin
 
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const [telemetry24h, telemetry7d] = await Promise.all([
+  const [telemetry24h, telemetry7d, sites, users] = await Promise.all([
     prisma.telemetry.findMany({
       where: { deviceId: device.id, ts: { gte: since24h } },
       orderBy: { ts: "asc" },
@@ -39,6 +41,8 @@ export default async function DeviceDetailPage({ params }: { params: { id: strin
       where: { deviceId: device.id, ts: { gte: since7d } },
       orderBy: { ts: "asc" },
     }),
+    prisma.site.findMany({ orderBy: { name: "asc" } }),
+    prisma.user.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   const chartData24h = telemetry24h.map((row) => ({
@@ -120,6 +124,18 @@ export default async function DeviceDetailPage({ params }: { params: { id: strin
               <dd>{formatDateTime(device.installedAt)}</dd>
             </div>
             <div className="flex justify-between">
+              <dt>満杯しきい値</dt>
+              <dd>{thresholds.fullThreshold}%</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>電池低下しきい値</dt>
+              <dd>{thresholds.lowBatteryThreshold}%</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>オフライン判定</dt>
+              <dd>{thresholds.offlineMinutes}分</dd>
+            </div>
+            <div className="flex justify-between">
               <dt>メモ</dt>
               <dd className="text-right">{device.notes ?? "-"}</dd>
             </div>
@@ -144,6 +160,12 @@ export default async function DeviceDetailPage({ params }: { params: { id: strin
           </div>
         </div>
       </div>
+
+      <DeviceEditForm
+        device={device}
+        sites={sites.map((site) => ({ id: site.id, name: site.name }))}
+        users={users.map((user) => ({ id: user.id, name: user.name ?? user.email }))}
+      />
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-900">タスク履歴</h3>

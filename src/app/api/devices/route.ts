@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { getThresholds, isOffline } from "@/lib/settings";
+import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
 import { logAudit } from "@/lib/audit";
 import { DeviceStatus, type Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const lowBatteryParam = searchParams.get("low_battery");
   const offlineParam = searchParams.get("offline");
 
-  const thresholds = await getThresholds();
+  const baseThresholds = await getThresholds();
   const where: Prisma.DeviceWhereInput = {};
   const andFilters: Prisma.DeviceWhereInput[] = [];
 
@@ -37,21 +37,6 @@ export async function GET(request: NextRequest) {
     andFilters.push({ status: statusParam as DeviceStatus });
   }
 
-  if (fullParam === "true") {
-    andFilters.push({ lastFillLevelPct: { gte: thresholds.fullThreshold } });
-  }
-
-  if (lowBatteryParam === "true") {
-    andFilters.push({ lastBatteryPct: { lte: thresholds.lowBatteryThreshold } });
-  }
-
-  if (offlineParam === "true") {
-    const cutoff = new Date(Date.now() - thresholds.offlineMinutes * 60 * 1000);
-    andFilters.push({
-      OR: [{ lastSeenAt: { lt: cutoff } }, { lastSeenAt: null }],
-    });
-  }
-
   if (andFilters.length > 0) {
     where.AND = andFilters;
   }
@@ -65,20 +50,31 @@ export async function GET(request: NextRequest) {
     orderBy: { lastSeenAt: "desc" },
   });
 
-  const response = devices.map((device) => ({
-    ...device,
-    isFull:
-      device.lastFillLevelPct !== null &&
-      device.lastFillLevelPct !== undefined &&
-      device.lastFillLevelPct >= thresholds.fullThreshold,
-    isLowBattery:
-      device.lastBatteryPct !== null &&
-      device.lastBatteryPct !== undefined &&
-      device.lastBatteryPct <= thresholds.lowBatteryThreshold,
-    isOffline: isOffline(device.lastSeenAt, thresholds.offlineMinutes),
-  }));
+  const enriched = devices.map((device) => {
+    const thresholds = resolveThresholds(baseThresholds, [device.site ?? {}, device]);
+    return {
+      ...device,
+      thresholds,
+      isFull:
+        device.lastFillLevelPct !== null &&
+        device.lastFillLevelPct !== undefined &&
+        device.lastFillLevelPct >= thresholds.fullThreshold,
+      isLowBattery:
+        device.lastBatteryPct !== null &&
+        device.lastBatteryPct !== undefined &&
+        device.lastBatteryPct <= thresholds.lowBatteryThreshold,
+      isOffline: isOffline(device.lastSeenAt, thresholds.offlineMinutes),
+    };
+  });
 
-  return NextResponse.json({ data: response, thresholds });
+  const filtered = enriched.filter((device) => {
+    if (fullParam === "true" && !device.isFull) return false;
+    if (lowBatteryParam === "true" && !device.isLowBattery) return false;
+    if (offlineParam === "true" && !device.isOffline) return false;
+    return true;
+  });
+
+  return NextResponse.json({ data: filtered, thresholds: baseThresholds });
 }
 
 export async function POST(request: NextRequest) {
@@ -105,6 +101,18 @@ export async function POST(request: NextRequest) {
       status,
       notes: body.notes ?? null,
       responsibleUserId: body.responsibleUserId ?? null,
+      fullThresholdOverride:
+        body.fullThresholdOverride === "" || body.fullThresholdOverride === undefined
+          ? null
+          : Number(body.fullThresholdOverride),
+      lowBatteryThresholdOverride:
+        body.lowBatteryThresholdOverride === "" || body.lowBatteryThresholdOverride === undefined
+          ? null
+          : Number(body.lowBatteryThresholdOverride),
+      offlineMinutesOverride:
+        body.offlineMinutesOverride === "" || body.offlineMinutesOverride === undefined
+          ? null
+          : Number(body.offlineMinutesOverride),
     },
   });
 

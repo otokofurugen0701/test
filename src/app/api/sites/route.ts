@@ -39,6 +39,18 @@ export async function POST(request: NextRequest) {
       lat: body.lat ?? null,
       lng: body.lng ?? null,
       notes: body.notes ?? null,
+      fullThresholdOverride:
+        body.fullThresholdOverride === "" || body.fullThresholdOverride === undefined
+          ? null
+          : Number(body.fullThresholdOverride),
+      lowBatteryThresholdOverride:
+        body.lowBatteryThresholdOverride === "" || body.lowBatteryThresholdOverride === undefined
+          ? null
+          : Number(body.lowBatteryThresholdOverride),
+      offlineMinutesOverride:
+        body.offlineMinutesOverride === "" || body.offlineMinutesOverride === undefined
+          ? null
+          : Number(body.offlineMinutesOverride),
     },
   });
 

@@ -6,6 +6,12 @@ export type Thresholds = {
   offlineMinutes: number;
 };
 
+export type ThresholdOverrideSource = {
+  fullThresholdOverride?: number | null;
+  lowBatteryThresholdOverride?: number | null;
+  offlineMinutesOverride?: number | null;
+};
+
 const DEFAULTS: Thresholds = {
   fullThreshold: 85,
   lowBatteryThreshold: 20,
@@ -23,6 +29,22 @@ export async function getThresholds(): Promise<Thresholds> {
     lowBatteryThreshold: settings.lowBatteryThreshold,
     offlineMinutes: settings.offlineMinutes,
   };
+}
+
+export function resolveThresholds(base: Thresholds, sources: ThresholdOverrideSource[]) {
+  const resolved = { ...base };
+  for (const source of sources) {
+    if (source?.fullThresholdOverride !== null && source?.fullThresholdOverride !== undefined) {
+      resolved.fullThreshold = source.fullThresholdOverride;
+    }
+    if (source?.lowBatteryThresholdOverride !== null && source?.lowBatteryThresholdOverride !== undefined) {
+      resolved.lowBatteryThreshold = source.lowBatteryThresholdOverride;
+    }
+    if (source?.offlineMinutesOverride !== null && source?.offlineMinutesOverride !== undefined) {
+      resolved.offlineMinutes = source.offlineMinutesOverride;
+    }
+  }
+  return resolved;
 }
 
 export function isOffline(lastSeenAt: Date | null | undefined, offlineMinutes: number) {

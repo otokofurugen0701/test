@@ -12,6 +12,7 @@ Next.js (App Router) + Prisma + PostgreSQL + NextAuth (Credentials) 構成で、
 - Auth: NextAuth (Credentials)
 - Charts: Recharts
 - Map: Mapbox Static API（`MAPBOX_TOKEN` が設定されている場合に表示）
+- Device Map: Mapbox GL（`NEXT_PUBLIC_MAPBOX_TOKEN` が設定されている場合に表示）
 
 ## セットアップ
 
@@ -274,4 +275,5 @@ curl -X POST "http://localhost:3000/api/cron/offline-sync" \
 ## 備考
 
 - オフライン判定は `Settings` で変更可能です（デフォルト30分）。
+- サイト/デバイス単位の上書きは編集画面から設定できます。
 - 管理画面APIは NextAuth による認証必須です。

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { getThresholds } from "@/lib/settings";
-import { syncOfflineAlertsForDevices } from "@/lib/alerting";
+import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
+import { syncOfflineAlert } from "@/lib/alerting";
 import type { AlertStatus, AlertType, AlertSeverity, Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -32,9 +32,19 @@ export async function GET(request: NextRequest) {
     where.AND = andFilters;
   }
 
-  const thresholds = await getThresholds();
-  const devices = await prisma.device.findMany({ select: { id: true, lastSeenAt: true } });
-  await syncOfflineAlertsForDevices(devices, thresholds.offlineMinutes);
+  const baseThresholds = await getThresholds();
+  const devices = await prisma.device.findMany({
+    select: {
+      id: true,
+      lastSeenAt: true,
+      offlineMinutesOverride: true,
+      site: { select: { offlineMinutesOverride: true } },
+    },
+  });
+  for (const device of devices) {
+    const thresholds = resolveThresholds(baseThresholds, [device.site ?? {}, device]);
+    await syncOfflineAlert(device, isOffline(device.lastSeenAt, thresholds.offlineMinutes));
+  }
 
   const alerts = await prisma.alert.findMany({
     where,

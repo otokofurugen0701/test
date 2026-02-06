@@ -3,8 +3,8 @@ import type { AlertSeverity, AlertStatus, AlertType, Prisma } from "@prisma/clie
 import { formatDateTime } from "@/lib/format";
 import { AlertStatusSelect } from "@/components/AlertStatusSelect";
 import { CreateTaskFromAlertButton } from "@/components/CreateTaskFromAlertButton";
-import { getThresholds } from "@/lib/settings";
-import { syncOfflineAlertsForDevices } from "@/lib/alerting";
+import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
+import { syncOfflineAlert } from "@/lib/alerting";
 
 type AlertsPageProps = {
   searchParams: {
@@ -26,9 +26,19 @@ export default async function AlertsPage({ searchParams }: AlertsPageProps) {
   if (searchParams.siteId) andFilters.push({ device: { siteId: searchParams.siteId } });
   if (andFilters.length > 0) where.AND = andFilters;
 
-  const thresholds = await getThresholds();
-  const devicesForOffline = await prisma.device.findMany({ select: { id: true, lastSeenAt: true } });
-  await syncOfflineAlertsForDevices(devicesForOffline, thresholds.offlineMinutes);
+  const baseThresholds = await getThresholds();
+  const devicesForOffline = await prisma.device.findMany({
+    select: {
+      id: true,
+      lastSeenAt: true,
+      offlineMinutesOverride: true,
+      site: { select: { offlineMinutesOverride: true } },
+    },
+  });
+  for (const device of devicesForOffline) {
+    const thresholds = resolveThresholds(baseThresholds, [device.site ?? {}, device]);
+    await syncOfflineAlert(device, isOffline(device.lastSeenAt, thresholds.offlineMinutes));
+  }
 
   const alerts = await prisma.alert.findMany({
     where,

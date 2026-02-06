@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { getThresholds } from "@/lib/settings";
-import { syncOfflineAlertsForDevices } from "@/lib/alerting";
+import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
+import { syncOfflineAlert } from "@/lib/alerting";
 
 export const runtime = "nodejs";
 
@@ -16,10 +16,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
   }
 
-  const thresholds = await getThresholds();
-  const devices = await prisma.device.findMany({ select: { id: true, lastSeenAt: true } });
+  const baseThresholds = await getThresholds();
+  const devices = await prisma.device.findMany({
+    select: {
+      id: true,
+      lastSeenAt: true,
+      offlineMinutesOverride: true,
+      site: { select: { offlineMinutesOverride: true } },
+    },
+  });
 
-  await syncOfflineAlertsForDevices(devices, thresholds.offlineMinutes);
+  for (const device of devices) {
+    const thresholds = resolveThresholds(baseThresholds, [device.site ?? {}, device]);
+    await syncOfflineAlert(device, isOffline(device.lastSeenAt, thresholds.offlineMinutes));
+  }
 
   return NextResponse.json({ ok: true, devices: devices.length });
 }

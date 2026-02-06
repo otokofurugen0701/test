@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { getThresholds, isOffline } from "@/lib/settings";
+import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
 import { formatDateTime, formatPct } from "@/lib/format";
+import { DeviceMap } from "@/components/DeviceMap";
 import type { DeviceStatus, Prisma } from "@prisma/client";
 
 type DevicesPageProps = {
@@ -16,7 +17,7 @@ type DevicesPageProps = {
 };
 
 export default async function DevicesPage({ searchParams }: DevicesPageProps) {
-  const thresholds = await getThresholds();
+  const baseThresholds = await getThresholds();
   const sites = await prisma.site.findMany({ orderBy: { name: "asc" } });
 
   const where: Prisma.DeviceWhereInput = {};
@@ -32,18 +33,6 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
 
   if (searchParams.siteId) andFilters.push({ siteId: searchParams.siteId });
   if (searchParams.status) andFilters.push({ status: searchParams.status });
-  if (searchParams.full === "true") {
-    andFilters.push({ lastFillLevelPct: { gte: thresholds.fullThreshold } });
-  }
-  if (searchParams.low_battery === "true") {
-    andFilters.push({ lastBatteryPct: { lte: thresholds.lowBatteryThreshold } });
-  }
-  if (searchParams.offline === "true") {
-    const cutoff = new Date(Date.now() - thresholds.offlineMinutes * 60 * 1000);
-    andFilters.push({
-      OR: [{ lastSeenAt: { lt: cutoff } }, { lastSeenAt: null }],
-    });
-  }
   if (andFilters.length > 0) where.AND = andFilters;
 
   const devices = await prisma.device.findMany({
@@ -53,23 +42,43 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
   });
 
   const enriched = devices.map((device) => {
-    const full = device.lastFillLevelPct !== null && device.lastFillLevelPct !== undefined
-      ? device.lastFillLevelPct >= thresholds.fullThreshold
-      : false;
+    const thresholds = resolveThresholds(baseThresholds, [device.site ?? {}, device]);
+    const full =
+      device.lastFillLevelPct !== null && device.lastFillLevelPct !== undefined
+        ? device.lastFillLevelPct >= thresholds.fullThreshold
+        : false;
     const lowBattery =
       device.lastBatteryPct !== null && device.lastBatteryPct !== undefined
         ? device.lastBatteryPct <= thresholds.lowBatteryThreshold
         : false;
     const offline = isOffline(device.lastSeenAt, thresholds.offlineMinutes);
-    return { device, full, lowBattery, offline };
+    return { device, full, lowBattery, offline, thresholds };
+  });
+
+  const filtered = enriched.filter(({ full, lowBattery, offline }) => {
+    if (searchParams.full === "true" && !full) return false;
+    if (searchParams.low_battery === "true" && !lowBattery) return false;
+    if (searchParams.offline === "true" && !offline) return false;
+    return true;
   });
 
   const counts = {
-    total: enriched.length,
-    full: enriched.filter((d) => d.full).length,
-    lowBattery: enriched.filter((d) => d.lowBattery).length,
-    offline: enriched.filter((d) => d.offline).length,
+    total: filtered.length,
+    full: filtered.filter((d) => d.full).length,
+    lowBattery: filtered.filter((d) => d.lowBattery).length,
+    offline: filtered.filter((d) => d.offline).length,
   };
+
+  const mapPoints = filtered
+    .filter(({ device }) => device.site?.lat !== null && device.site?.lat !== undefined && device.site?.lng !== null && device.site?.lng !== undefined)
+    .map(({ device, full, lowBattery, offline }) => ({
+      id: device.id,
+      name: device.name,
+      deviceCode: device.deviceCode,
+      lat: device.site!.lat!,
+      lng: device.site!.lng!,
+      status: offline ? "offline" : full ? "full" : lowBattery ? "low_battery" : "ok",
+    }));
 
   return (
     <div className="space-y-6">
@@ -145,6 +154,11 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
         </div>
       </form>
 
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-slate-900">デバイス位置マップ</h3>
+        <DeviceMap devices={mapPoints} />
+      </div>
+
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-100 text-left text-xs text-slate-600">
@@ -158,7 +172,7 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
             </tr>
           </thead>
           <tbody>
-            {enriched.map(({ device, full, lowBattery, offline }) => (
+            {filtered.map(({ device, full, lowBattery, offline }) => (
               <tr key={device.id} className="border-t border-slate-200">
                 <td className="px-4 py-3">
                   <Link href={`/devices/${device.id}`} className="font-semibold text-slate-900 hover:underline">
@@ -192,7 +206,7 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
                 <td className="px-4 py-3 text-slate-600">{formatDateTime(device.lastSeenAt)}</td>
               </tr>
             ))}
-            {enriched.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
                   該当するデバイスがありません
