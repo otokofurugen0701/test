@@ -18,6 +18,7 @@ type DeviceMapProps = {
   devices: DeviceMapPoint[];
   onSelect?: (device: DeviceMapPoint) => void;
   onClear?: () => void;
+  onMapClick?: (lng: number, lat: number) => void;
 };
 
 type DeviceGeoJson = {
@@ -41,12 +42,13 @@ type DeviceGeoJson = {
 
 const DEFAULT_CENTER: [number, number] = [139.6917, 35.6895];
 
-export function DeviceMap({ devices, onSelect, onClear }: DeviceMapProps) {
+export function DeviceMap({ devices, onSelect, onClear, onMapClick }: DeviceMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const devicesRef = useRef<DeviceMapPoint[]>(devices);
   const onSelectRef = useRef<DeviceMapProps["onSelect"]>(undefined);
   const onClearRef = useRef<DeviceMapProps["onClear"]>(undefined);
+  const onMapClickRef = useRef<DeviceMapProps["onMapClick"]>(undefined);
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   useEffect(() => {
@@ -60,6 +62,10 @@ export function DeviceMap({ devices, onSelect, onClear }: DeviceMapProps) {
   useEffect(() => {
     onClearRef.current = onClear;
   }, [onClear]);
+
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
 
   const geojson: DeviceGeoJson = useMemo(
     () => ({
@@ -204,9 +210,12 @@ export function DeviceMap({ devices, onSelect, onClear }: DeviceMapProps) {
       });
 
       map.on("click", (event) => {
-        const hits = map.queryRenderedFeatures(event.point, { layers: ["unclustered-point"] });
+        const hits = map.queryRenderedFeatures(event.point, {
+          layers: ["unclustered-point", "clusters"],
+        });
         if (hits.length === 0) {
           onClearRef.current?.();
+          onMapClickRef.current?.(event.lngLat.lng, event.lngLat.lat);
         }
       });
 
