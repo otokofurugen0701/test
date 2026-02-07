@@ -27,6 +27,7 @@ type DeviceMapPoint = {
   responsibleUserId?: string | null;
   notes?: string | null;
   alerts?: Array<{ id: string; type: string; severity: string; status: string }>;
+  openTaskTypes?: string[];
 };
 
 type DeviceMapPanelProps = {
@@ -77,6 +78,20 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     [devices, selectedId]
   );
   const mapDeviceIds = useMemo(() => devices.map((device) => device.id), [devices]);
+  const bulkPreview = useMemo(() => {
+    const candidates = devices;
+    const created: DeviceMapPoint[] = [];
+    const skipped: DeviceMapPoint[] = [];
+    for (const device of candidates) {
+      const openTypes = device.openTaskTypes ?? [];
+      if (openTypes.includes(bulkTaskType)) {
+        skipped.push(device);
+      } else {
+        created.push(device);
+      }
+    }
+    return { created, skipped };
+  }, [devices, bulkTaskType]);
 
   const [deviceStatus, setDeviceStatus] = useState<DeviceMapPoint["deviceStatus"]>("ACTIVE");
   const [siteId, setSiteId] = useState("");
@@ -1001,6 +1016,45 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
             <p className="text-[11px] text-slate-400">
               同種の未完了タスクがあるデバイスは自動でスキップされます。
             </p>
+            <details className="text-[11px] text-slate-500">
+              <summary className="cursor-pointer text-slate-600">対象デバイス一覧</summary>
+              <div className="mt-2 space-y-2">
+                <div>
+                  <p className="font-semibold text-slate-700">
+                    作成対象: {bulkPreview.created.length}件
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                    {bulkPreview.created.slice(0, 10).map((device) => (
+                      <li key={device.id}>
+                        {device.name} ({device.deviceCode})
+                      </li>
+                    ))}
+                  </ul>
+                  {bulkPreview.created.length > 10 && (
+                    <p className="text-[11px] text-slate-400">
+                      他 {bulkPreview.created.length - 10} 件
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-700">
+                    スキップ: {bulkPreview.skipped.length}件
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                    {bulkPreview.skipped.slice(0, 10).map((device) => (
+                      <li key={device.id}>
+                        {device.name} ({device.deviceCode})
+                      </li>
+                    ))}
+                  </ul>
+                  {bulkPreview.skipped.length > 10 && (
+                    <p className="text-[11px] text-slate-400">
+                      他 {bulkPreview.skipped.length - 10} 件
+                    </p>
+                  )}
+                </div>
+              </div>
+            </details>
             <select
               value={bulkTaskType}
               onChange={(event) => setBulkTaskType(event.target.value)}

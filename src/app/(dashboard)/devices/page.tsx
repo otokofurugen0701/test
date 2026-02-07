@@ -4,7 +4,7 @@ import { formatDateTime, formatPct } from "@/lib/format";
 import { DeviceMapPanel } from "@/components/DeviceMapPanel";
 import { DeviceCreateForm } from "@/components/DeviceCreateForm";
 import { DeviceTable } from "@/components/DeviceTable";
-import { AlertStatus } from "@prisma/client";
+import { AlertStatus, TaskStatus } from "@prisma/client";
 import type { DeviceStatus, Prisma } from "@prisma/client";
 
 type DevicesPageProps = {
@@ -68,21 +68,36 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
   });
 
   const deviceIds = filtered.map(({ device }) => device.id);
-  const openAlerts =
+  const [openAlerts, openTasks] =
     deviceIds.length > 0
-      ? await prisma.alert.findMany({
-          where: {
-            deviceId: { in: deviceIds },
-            status: { in: [AlertStatus.OPEN, AlertStatus.IN_PROGRESS] },
-          },
-          orderBy: { openedAt: "desc" },
-        })
-      : [];
+      ? await Promise.all([
+          prisma.alert.findMany({
+            where: {
+              deviceId: { in: deviceIds },
+              status: { in: [AlertStatus.OPEN, AlertStatus.IN_PROGRESS] },
+            },
+            orderBy: { openedAt: "desc" },
+          }),
+          prisma.task.findMany({
+            where: {
+              deviceId: { in: deviceIds },
+              status: { in: [TaskStatus.TODO, TaskStatus.IN_PROGRESS] },
+            },
+            select: { deviceId: true, type: true },
+          }),
+        ])
+      : [[], []];
   const alertsByDevice = new Map<string, typeof openAlerts>();
   for (const alert of openAlerts) {
     const current = alertsByDevice.get(alert.deviceId) ?? [];
     current.push(alert);
     alertsByDevice.set(alert.deviceId, current);
+  }
+  const openTasksByDevice = new Map<string, Set<string>>();
+  for (const task of openTasks) {
+    const current = openTasksByDevice.get(task.deviceId) ?? new Set<string>();
+    current.add(task.type);
+    openTasksByDevice.set(task.deviceId, current);
   }
 
   const counts = {
@@ -126,6 +141,7 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
           severity: alert.severity,
           status: alert.status,
         })) ?? [],
+      openTaskTypes: Array.from(openTasksByDevice.get(device.id) ?? []),
     }));
 
   return (
