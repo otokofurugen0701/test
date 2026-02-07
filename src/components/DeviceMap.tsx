@@ -25,6 +25,10 @@ type DeviceMapProps = {
     start: { lat: number; lng: number };
     end: { lat: number; lng: number };
   } | null;
+  rangeSelectionEnabled?: boolean;
+  onRangeStart?: (lng: number, lat: number) => void;
+  onRangeMove?: (lng: number, lat: number) => void;
+  onRangeEnd?: (lng: number, lat: number) => void;
 };
 
 type DeviceGeoJson = {
@@ -56,6 +60,10 @@ export function DeviceMap({
   selectedDevice,
   onDragEnd,
   rangeBox,
+  rangeSelectionEnabled,
+  onRangeStart,
+  onRangeMove,
+  onRangeEnd,
 }: DeviceMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -66,6 +74,10 @@ export function DeviceMap({
   const onClearRef = useRef<DeviceMapProps["onClear"]>(undefined);
   const onMapClickRef = useRef<DeviceMapProps["onMapClick"]>(undefined);
   const onDragEndRef = useRef<DeviceMapProps["onDragEnd"]>(undefined);
+  const rangeSelectionEnabledRef = useRef<boolean>(false);
+  const onRangeStartRef = useRef<DeviceMapProps["onRangeStart"]>(undefined);
+  const onRangeMoveRef = useRef<DeviceMapProps["onRangeMove"]>(undefined);
+  const onRangeEndRef = useRef<DeviceMapProps["onRangeEnd"]>(undefined);
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   useEffect(() => {
@@ -87,6 +99,22 @@ export function DeviceMap({
   useEffect(() => {
     onDragEndRef.current = onDragEnd;
   }, [onDragEnd]);
+
+  useEffect(() => {
+    rangeSelectionEnabledRef.current = Boolean(rangeSelectionEnabled);
+  }, [rangeSelectionEnabled]);
+
+  useEffect(() => {
+    onRangeStartRef.current = onRangeStart;
+  }, [onRangeStart]);
+
+  useEffect(() => {
+    onRangeMoveRef.current = onRangeMove;
+  }, [onRangeMove]);
+
+  useEffect(() => {
+    onRangeEndRef.current = onRangeEnd;
+  }, [onRangeEnd]);
 
   const geojson: DeviceGeoJson = useMemo(
     () => ({
@@ -298,13 +326,43 @@ export function DeviceMap({
         map.getCanvas().style.cursor = "pointer";
       });
       map.on("mouseleave", "clusters", () => {
-        map.getCanvas().style.cursor = "";
+        map.getCanvas().style.cursor = rangeSelectionEnabledRef.current ? "crosshair" : "";
       });
       map.on("mouseenter", "unclustered-point", () => {
         map.getCanvas().style.cursor = "pointer";
       });
       map.on("mouseleave", "unclustered-point", () => {
-        map.getCanvas().style.cursor = "";
+        map.getCanvas().style.cursor = rangeSelectionEnabledRef.current ? "crosshair" : "";
+      });
+
+      let selecting = false;
+      const onMouseDown = (event: mapboxgl.MapMouseEvent & mapboxgl.EventData) => {
+        if (!rangeSelectionEnabledRef.current) return;
+        selecting = true;
+        map.dragPan.disable();
+        map.getCanvas().style.cursor = "crosshair";
+        onRangeStartRef.current?.(event.lngLat.lng, event.lngLat.lat);
+      };
+      const onMouseMove = (event: mapboxgl.MapMouseEvent & mapboxgl.EventData) => {
+        if (!selecting || !rangeSelectionEnabledRef.current) return;
+        onRangeMoveRef.current?.(event.lngLat.lng, event.lngLat.lat);
+      };
+      const onMouseUp = (event: mapboxgl.MapMouseEvent & mapboxgl.EventData) => {
+        if (!selecting || !rangeSelectionEnabledRef.current) return;
+        selecting = false;
+        map.dragPan.enable();
+        onRangeEndRef.current?.(event.lngLat.lng, event.lngLat.lat);
+        map.getCanvas().style.cursor = rangeSelectionEnabledRef.current ? "crosshair" : "";
+      };
+
+      map.on("mousedown", onMouseDown);
+      map.on("mousemove", onMouseMove);
+      map.on("mouseup", onMouseUp);
+
+      map.once("remove", () => {
+        map.off("mousedown", onMouseDown);
+        map.off("mousemove", onMouseMove);
+        map.off("mouseup", onMouseUp);
       });
     });
 

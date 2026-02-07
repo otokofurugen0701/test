@@ -70,10 +70,15 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [bulkTaskDueAt, setBulkTaskDueAt] = useState("");
   const [bulkTaskNotes, setBulkTaskNotes] = useState("地図から一括作成");
   const [bulkTaskResult, setBulkTaskResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [bulkAlertType, setBulkAlertType] = useState("FULL");
+  const [bulkAlertSeverity, setBulkAlertSeverity] = useState("MEDIUM");
+  const [bulkAlertNotes, setBulkAlertNotes] = useState("");
+  const [bulkAlertResult, setBulkAlertResult] = useState<{ created: number; skipped: number } | null>(null);
   const [rangeSelectionMode, setRangeSelectionMode] = useState(false);
   const [rangeStart, setRangeStart] = useState<{ lat: number; lng: number } | null>(null);
   const [rangeSelectedIds, setRangeSelectedIds] = useState<string[]>([]);
   const [rangeBox, setRangeBox] = useState<{ start: { lat: number; lng: number }; end: { lat: number; lng: number } } | null>(null);
+  const rangeStartRef = useRef<{ lat: number; lng: number } | null>(null);
   const [autoCreateTask, setAutoCreateTask] = useState(false);
   const lastAutoCreatedId = useRef<string | null>(null);
 
@@ -484,6 +489,31 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     });
   };
 
+  const bulkCreateAlerts = () => {
+    if (targetDeviceIds.length === 0) return;
+    const message = `対象: ${targetDeviceIds.length}件\nアラートを一括作成しますか？`;
+    if (!window.confirm(message)) return;
+    startBulkUpdatingMap(async () => {
+      const response = await fetch("/api/alerts/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceIds: targetDeviceIds,
+          type: bulkAlertType,
+          severity: bulkAlertSeverity,
+          details: bulkAlertNotes ? { note: bulkAlertNotes } : null,
+        }),
+      });
+      const payload = await response.json();
+      setBulkAlertNotes("");
+      setBulkAlertResult({
+        created: payload?.createdCount ?? 0,
+        skipped: payload?.skippedCount ?? 0,
+      });
+      router.refresh();
+    });
+  };
+
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
       <DeviceMap
@@ -491,30 +521,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
         onSelect={(device) => setSelectedId(device.id)}
         onClear={() => setSelectedId(null)}
         onMapClick={(lng, lat) => {
-          if (rangeSelectionMode) {
-            if (!rangeStart) {
-              setRangeStart({ lat, lng });
-              setRangeBox({ start: { lat, lng }, end: { lat, lng } });
-              return;
-            }
-            const minLat = Math.min(rangeStart.lat, lat);
-            const maxLat = Math.max(rangeStart.lat, lat);
-            const minLng = Math.min(rangeStart.lng, lng);
-            const maxLng = Math.max(rangeStart.lng, lng);
-            const selectedIds = devices
-              .filter(
-                (device) =>
-                  device.lat >= minLat &&
-                  device.lat <= maxLat &&
-                  device.lng >= minLng &&
-                  device.lng <= maxLng
-              )
-              .map((device) => device.id);
-            setRangeSelectedIds(selectedIds);
-            setRangeBox({ start: rangeStart, end: { lat, lng } });
-            setRangeStart(null);
-            return;
-          }
+          if (rangeSelectionMode) return;
           const latValue = lat.toFixed(6);
           const lngValue = lng.toFixed(6);
           setMapClickLat(latValue);
@@ -524,6 +531,38 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
         }}
         selectedDevice={selected ? { id: selected.id, lat: selected.lat, lng: selected.lng } : null}
         rangeBox={rangeSelectionMode ? rangeBox : null}
+        rangeSelectionEnabled={rangeSelectionMode}
+        onRangeStart={(lng, lat) => {
+          rangeStartRef.current = { lat, lng };
+          setRangeStart({ lat, lng });
+          setRangeBox({ start: { lat, lng }, end: { lat, lng } });
+          setRangeSelectedIds([]);
+        }}
+        onRangeMove={(lng, lat) => {
+          if (!rangeStartRef.current) return;
+          setRangeBox({ start: rangeStartRef.current, end: { lat, lng } });
+        }}
+        onRangeEnd={(lng, lat) => {
+          if (!rangeStartRef.current) return;
+          const start = rangeStartRef.current;
+          const minLat = Math.min(start.lat, lat);
+          const maxLat = Math.max(start.lat, lat);
+          const minLng = Math.min(start.lng, lng);
+          const maxLng = Math.max(start.lng, lng);
+          const selectedIds = devices
+            .filter(
+              (device) =>
+                device.lat >= minLat &&
+                device.lat <= maxLat &&
+                device.lng >= minLng &&
+                device.lng <= maxLng
+            )
+            .map((device) => device.id);
+          setRangeSelectedIds(selectedIds);
+          setRangeBox({ start, end: { lat, lng } });
+          setRangeStart(null);
+          rangeStartRef.current = null;
+        }}
         onDragEnd={(lng, lat) => {
           const latValue = lat.toFixed(6);
           const lngValue = lng.toFixed(6);
@@ -1014,6 +1053,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
                 onChange={(event) => {
                   setRangeSelectionMode(event.target.checked);
                   setRangeStart(null);
+                  rangeStartRef.current = null;
                   setRangeSelectedIds([]);
                   setRangeBox(null);
                 }}
@@ -1028,9 +1068,9 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           </p>
           {rangeSelectionMode && (
             <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">
-              {rangeStart
-                ? "開始点を設定しました。もう一度地図をクリックして範囲を確定してください。"
-                : "範囲選択を開始できます。"}
+                  {rangeStart
+                ? "ドラッグ中です。マウスを離して範囲を確定してください。"
+                : "マウスでドラッグして範囲を選択できます。"}
               {rangeSelectedIds.length > 0 && (
                 <div className="mt-1 flex items-center justify-between">
                   <span>選択中: {rangeSelectedIds.length}件</span>
@@ -1180,6 +1220,46 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
             {bulkTaskResult && (
               <p className="text-[11px] text-slate-500">
                 作成: {bulkTaskResult.created} / スキップ: {bulkTaskResult.skipped}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
+            <p className="text-[11px] font-semibold text-slate-400">アラート一括作成</p>
+            <select
+              value={bulkAlertType}
+              onChange={(event) => setBulkAlertType(event.target.value)}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="FULL">満杯</option>
+              <option value="LOW_BATTERY">電池低下</option>
+              <option value="OFFLINE">通信断</option>
+            </select>
+            <select
+              value={bulkAlertSeverity}
+              onChange={(event) => setBulkAlertSeverity(event.target.value)}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="LOW">低</option>
+              <option value="MEDIUM">中</option>
+              <option value="HIGH">高</option>
+            </select>
+            <input
+              value={bulkAlertNotes}
+              onChange={(event) => setBulkAlertNotes(event.target.value)}
+              placeholder="詳細メモ"
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+            <button
+              onClick={bulkCreateAlerts}
+              disabled={isBulkUpdatingMap || targetDeviceIds.length === 0}
+              className="w-full rounded-md bg-rose-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            >
+              アラート一括作成
+            </button>
+            {bulkAlertResult && (
+              <p className="text-[11px] text-slate-500">
+                作成: {bulkAlertResult.created} / スキップ: {bulkAlertResult.skipped}
               </p>
             )}
           </div>
