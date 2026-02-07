@@ -70,6 +70,9 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [bulkTaskDueAt, setBulkTaskDueAt] = useState("");
   const [bulkTaskNotes, setBulkTaskNotes] = useState("地図から一括作成");
   const [bulkTaskResult, setBulkTaskResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [rangeSelectionMode, setRangeSelectionMode] = useState(false);
+  const [rangeStart, setRangeStart] = useState<{ lat: number; lng: number } | null>(null);
+  const [rangeSelectedIds, setRangeSelectedIds] = useState<string[]>([]);
   const [autoCreateTask, setAutoCreateTask] = useState(false);
   const lastAutoCreatedId = useRef<string | null>(null);
 
@@ -78,8 +81,13 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     [devices, selectedId]
   );
   const mapDeviceIds = useMemo(() => devices.map((device) => device.id), [devices]);
+  const targetDeviceIds = rangeSelectionMode ? rangeSelectedIds : mapDeviceIds;
+  const targetDevices = useMemo(
+    () => devices.filter((device) => targetDeviceIds.includes(device.id)),
+    [devices, targetDeviceIds]
+  );
   const bulkPreview = useMemo(() => {
-    const candidates = devices;
+    const candidates = targetDevices;
     const created: DeviceMapPoint[] = [];
     const skipped: DeviceMapPoint[] = [];
     for (const device of candidates) {
@@ -91,7 +99,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
       }
     }
     return { created, skipped };
-  }, [devices, bulkTaskType]);
+  }, [targetDevices, bulkTaskType]);
 
   const [deviceStatus, setDeviceStatus] = useState<DeviceMapPoint["deviceStatus"]>("ACTIVE");
   const [siteId, setSiteId] = useState("");
@@ -430,13 +438,13 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   };
 
   const bulkUpdateMapDevices = (payload: { status?: string | null; responsibleUserId?: string | null }) => {
-    if (mapDeviceIds.length === 0) return;
+    if (targetDeviceIds.length === 0) return;
     startBulkUpdatingMap(async () => {
       await fetch("/api/devices/bulk", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          deviceIds: mapDeviceIds,
+          deviceIds: targetDeviceIds,
           status: payload.status,
           responsibleUserId: payload.responsibleUserId,
         }),
@@ -448,13 +456,15 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   };
 
   const bulkCreateTasks = () => {
-    if (mapDeviceIds.length === 0) return;
+    if (targetDeviceIds.length === 0) return;
+    const message = `対象: ${targetDeviceIds.length}件\n作成: ${bulkPreview.created.length}件\nスキップ: ${bulkPreview.skipped.length}件\n一括作成しますか？`;
+    if (!window.confirm(message)) return;
     startBulkUpdatingMap(async () => {
       const response = await fetch("/api/tasks/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          deviceIds: mapDeviceIds,
+          deviceIds: targetDeviceIds,
           type: bulkTaskType,
           assigneeUserId: bulkTaskAssigneeId || null,
           dueAt: bulkTaskDueAt || null,
@@ -480,6 +490,28 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
         onSelect={(device) => setSelectedId(device.id)}
         onClear={() => setSelectedId(null)}
         onMapClick={(lng, lat) => {
+          if (rangeSelectionMode) {
+            if (!rangeStart) {
+              setRangeStart({ lat, lng });
+              return;
+            }
+            const minLat = Math.min(rangeStart.lat, lat);
+            const maxLat = Math.max(rangeStart.lat, lat);
+            const minLng = Math.min(rangeStart.lng, lng);
+            const maxLng = Math.max(rangeStart.lng, lng);
+            const selectedIds = devices
+              .filter(
+                (device) =>
+                  device.lat >= minLat &&
+                  device.lat <= maxLat &&
+                  device.lng >= minLng &&
+                  device.lng <= maxLng
+              )
+              .map((device) => device.id);
+            setRangeSelectedIds(selectedIds);
+            setRangeStart(null);
+            return;
+          }
           const latValue = lat.toFixed(6);
           const lngValue = lng.toFixed(6);
           setMapClickLat(latValue);
@@ -969,12 +1001,49 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
         </div>
 
         <div className="space-y-2 border-t border-slate-200 pt-3">
-          <p className="text-xs font-semibold text-slate-500">
-            地図の対象デバイス一括操作（{mapDeviceIds.length}件）
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-500">
+              地図の対象デバイス一括操作（{targetDeviceIds.length}件）
+            </p>
+            <label className="flex items-center gap-2 text-[11px] text-slate-500">
+              <input
+                type="checkbox"
+                checked={rangeSelectionMode}
+                onChange={(event) => {
+                  setRangeSelectionMode(event.target.checked);
+                  setRangeStart(null);
+                  setRangeSelectedIds([]);
+                }}
+              />
+              範囲選択モード
+            </label>
+          </div>
           <p className="text-[11px] text-slate-400">
-            地図に表示されているデバイスのみが対象です。
+            {rangeSelectionMode
+              ? "地図を2回クリックして範囲選択します。選択がない場合は一括操作できません。"
+              : "地図に表示されているデバイスのみが対象です。"}
           </p>
+          {rangeSelectionMode && (
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">
+              {rangeStart
+                ? "開始点を設定しました。もう一度地図をクリックして範囲を確定してください。"
+                : "範囲選択を開始できます。"}
+              {rangeSelectedIds.length > 0 && (
+                <div className="mt-1 flex items-center justify-between">
+                  <span>選択中: {rangeSelectedIds.length}件</span>
+                  <button
+                    onClick={() => {
+                      setRangeSelectedIds([]);
+                      setRangeStart(null);
+                    }}
+                    className="text-[11px] text-blue-600 hover:underline"
+                  >
+                    選択を解除
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <select
             value={bulkMapAssigneeId}
             onChange={(event) => setBulkMapAssigneeId(event.target.value)}
@@ -989,7 +1058,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           </select>
           <button
             onClick={() => bulkUpdateMapDevices({ responsibleUserId: bulkMapAssigneeId || null })}
-            disabled={isBulkUpdatingMap || !bulkMapAssigneeId || mapDeviceIds.length === 0}
+            disabled={isBulkUpdatingMap || !bulkMapAssigneeId || targetDeviceIds.length === 0}
             className="w-full rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             担当者一括変更
@@ -1006,7 +1075,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           </select>
           <button
             onClick={() => bulkUpdateMapDevices({ status: bulkMapStatus || null })}
-            disabled={isBulkUpdatingMap || !bulkMapStatus || mapDeviceIds.length === 0}
+            disabled={isBulkUpdatingMap || !bulkMapStatus || targetDeviceIds.length === 0}
             className="w-full rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             ステータス一括変更
@@ -1025,8 +1094,13 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
                   </p>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
                     {bulkPreview.created.slice(0, 10).map((device) => (
-                      <li key={device.id}>
-                        {device.name} ({device.deviceCode})
+                      <li key={device.id} className="flex items-center gap-2">
+                        <span>
+                          {device.name} ({device.deviceCode})
+                        </span>
+                        <span className={`text-[10px] font-semibold ${statusColor[device.status]}`}>
+                          {statusLabel[device.status]}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -1042,8 +1116,13 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
                   </p>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
                     {bulkPreview.skipped.slice(0, 10).map((device) => (
-                      <li key={device.id}>
-                        {device.name} ({device.deviceCode})
+                      <li key={device.id} className="flex items-center gap-2">
+                        <span>
+                          {device.name} ({device.deviceCode})
+                        </span>
+                        <span className={`text-[10px] font-semibold ${statusColor[device.status]}`}>
+                          {statusLabel[device.status]}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -1089,7 +1168,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
             />
             <button
               onClick={bulkCreateTasks}
-              disabled={isBulkUpdatingMap || mapDeviceIds.length === 0}
+              disabled={isBulkUpdatingMap || targetDeviceIds.length === 0}
               className="w-full rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
             >
               タスク一括作成
