@@ -63,6 +63,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [isAutoSavingSite, startAutoSavingSite] = useTransition();
   const [isCreatingDevice, startCreatingDevice] = useTransition();
   const [createNewSiteOnDrag, setCreateNewSiteOnDrag] = useState(false);
+  const [isBulkUpdatingMap, startBulkUpdatingMap] = useTransition();
   const [autoCreateTask, setAutoCreateTask] = useState(false);
   const lastAutoCreatedId = useRef<string | null>(null);
 
@@ -70,6 +71,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     () => devices.find((device) => device.id === selectedId) ?? null,
     [devices, selectedId]
   );
+  const mapDeviceIds = useMemo(() => devices.map((device) => device.id), [devices]);
 
   const [deviceStatus, setDeviceStatus] = useState<DeviceMapPoint["deviceStatus"]>("ACTIVE");
   const [siteId, setSiteId] = useState("");
@@ -104,6 +106,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [newSiteOfflineMinutesOverride, setNewSiteOfflineMinutesOverride] = useState("");
   const [mapClickLat, setMapClickLat] = useState("");
   const [mapClickLng, setMapClickLng] = useState("");
+  const [createDeviceWithSite, setCreateDeviceWithSite] = useState(false);
 
   const [newDeviceCode, setNewDeviceCode] = useState("");
   const [newDeviceName, setNewDeviceName] = useState("");
@@ -111,6 +114,8 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [newDeviceSiteId, setNewDeviceSiteId] = useState("");
   const [newDeviceAssigneeId, setNewDeviceAssigneeId] = useState("");
   const [newDeviceNotes, setNewDeviceNotes] = useState("");
+  const [bulkMapAssigneeId, setBulkMapAssigneeId] = useState("");
+  const [bulkMapStatus, setBulkMapStatus] = useState("");
 
   useEffect(() => {
     if (!selected) return;
@@ -328,7 +333,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const onCreateSite = () => {
     if (!newSiteName || !newSiteLat || !newSiteLng) return;
     startSavingSite(async () => {
-      await fetch("/api/sites", {
+      const response = await fetch("/api/sites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -342,6 +347,28 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           offlineMinutesOverride: toNullableNumber(newSiteOfflineMinutesOverride),
         }),
       });
+      const payload = await response.json();
+      const newSiteId = payload?.data?.id;
+      if (createDeviceWithSite && newDeviceCode && newDeviceName && newSiteId) {
+        await fetch("/api/devices", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            deviceCode: newDeviceCode,
+            name: newDeviceName,
+            status: newDeviceStatus,
+            siteId: newSiteId,
+            responsibleUserId: newDeviceAssigneeId || null,
+            notes: newDeviceNotes || null,
+          }),
+        });
+        setNewDeviceCode("");
+        setNewDeviceName("");
+        setNewDeviceStatus("ACTIVE");
+        setNewDeviceSiteId("");
+        setNewDeviceAssigneeId("");
+        setNewDeviceNotes("");
+      }
       setNewSiteName("");
       setNewSiteAddress("");
       setNewSiteLat("");
@@ -352,6 +379,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
       setNewSiteOfflineMinutesOverride("");
       setMapClickLat("");
       setMapClickLng("");
+      setCreateDeviceWithSite(false);
       router.refresh();
     });
   };
@@ -381,6 +409,24 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     });
   };
 
+  const bulkUpdateMapDevices = (payload: { status?: string | null; responsibleUserId?: string | null }) => {
+    if (mapDeviceIds.length === 0) return;
+    startBulkUpdatingMap(async () => {
+      await fetch("/api/devices/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceIds: mapDeviceIds,
+          status: payload.status,
+          responsibleUserId: payload.responsibleUserId,
+        }),
+      });
+      setBulkMapAssigneeId("");
+      setBulkMapStatus("");
+      router.refresh();
+    });
+  };
+
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
       <DeviceMap
@@ -401,9 +447,11 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
         onDragEnd={(lng, lat) => {
           const latValue = lat.toFixed(6);
           const lngValue = lng.toFixed(6);
+          const oldLat = selected?.lat ? selected.lat.toFixed(6) : "-";
+          const oldLng = selected?.lng ? selected.lng.toFixed(6) : "-";
           const message = createNewSiteOnDrag
-            ? "このデバイス用に新しいサイトを作成しますか？"
-            : "このサイトの座標を更新しますか？同じサイトの全デバイスに影響します。";
+            ? `旧: ${oldLat}, ${oldLng}\n新: ${latValue}, ${lngValue}\nこのデバイス用に新しいサイトを作成しますか？`
+            : `旧: ${oldLat}, ${oldLng}\n新: ${latValue}, ${lngValue}\nこのサイトの座標を更新しますか？同じサイトの全デバイスに影響します。`;
           if (!window.confirm(message)) {
             return false;
           }
@@ -795,6 +843,14 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
               className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
             />
           </div>
+          <label className="flex items-center gap-2 text-xs text-slate-500">
+            <input
+              type="checkbox"
+              checked={createDeviceWithSite}
+              onChange={(event) => setCreateDeviceWithSite(event.target.checked)}
+            />
+            サイト作成後に下のデバイス入力で同時作成
+          </label>
           <button
             onClick={onCreateSite}
             disabled={isSavingSite}
@@ -863,6 +919,51 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
             className="w-full rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {isCreatingDevice ? "作成中..." : "デバイス作成"}
+          </button>
+        </div>
+
+        <div className="space-y-2 border-t border-slate-200 pt-3">
+          <p className="text-xs font-semibold text-slate-500">
+            地図の対象デバイス一括操作（{mapDeviceIds.length}件）
+          </p>
+          <p className="text-[11px] text-slate-400">
+            地図に表示されているデバイスのみが対象です。
+          </p>
+          <select
+            value={bulkMapAssigneeId}
+            onChange={(event) => setBulkMapAssigneeId(event.target.value)}
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          >
+            <option value="">担当者を選択</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => bulkUpdateMapDevices({ responsibleUserId: bulkMapAssigneeId || null })}
+            disabled={isBulkUpdatingMap || !bulkMapAssigneeId || mapDeviceIds.length === 0}
+            className="w-full rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            担当者一括変更
+          </button>
+          <select
+            value={bulkMapStatus}
+            onChange={(event) => setBulkMapStatus(event.target.value)}
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          >
+            <option value="">ステータスを選択</option>
+            <option value="ACTIVE">稼働中</option>
+            <option value="INACTIVE">停止</option>
+            <option value="MAINTENANCE">保守中</option>
+          </select>
+          <button
+            onClick={() => bulkUpdateMapDevices({ status: bulkMapStatus || null })}
+            disabled={isBulkUpdatingMap || !bulkMapStatus || mapDeviceIds.length === 0}
+            className="w-full rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            ステータス一括変更
           </button>
         </div>
       </div>

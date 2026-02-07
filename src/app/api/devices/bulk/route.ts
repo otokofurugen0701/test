@@ -44,13 +44,17 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  if (status !== undefined && !Object.values(DeviceStatus).includes(status)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+
   const data: { siteId?: string | null; responsibleUserId?: string | null; status?: DeviceStatus } = {};
   if (siteId !== undefined) data.siteId = siteId === "" ? null : siteId;
   if (responsibleUserId !== undefined) {
     data.responsibleUserId = responsibleUserId === "" ? null : responsibleUserId;
   }
-  if (status !== undefined && Object.values(DeviceStatus).includes(status)) {
-    data.status = status;
+  if (status !== undefined) {
+    data.status = status as DeviceStatus;
   }
 
   const updated = await prisma.device.updateMany({
