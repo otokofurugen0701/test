@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
 import { formatDateTime, formatPct } from "@/lib/format";
 import { DeviceMapPanel } from "@/components/DeviceMapPanel";
 import { DeviceCreateForm } from "@/components/DeviceCreateForm";
+import { DeviceTable } from "@/components/DeviceTable";
 import { AlertStatus } from "@prisma/client";
 import type { DeviceStatus, Prisma } from "@prisma/client";
 
@@ -216,63 +216,21 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
         />
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-100 text-left text-xs text-slate-600">
-            <tr>
-              <th className="px-4 py-3">デバイス</th>
-              <th className="px-4 py-3">サイト</th>
-              <th className="px-4 py-3">積載量</th>
-              <th className="px-4 py-3">電池</th>
-              <th className="px-4 py-3">状態</th>
-              <th className="px-4 py-3">最終通信</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(({ device, full, lowBattery, offline }) => (
-              <tr key={device.id} className="border-t border-slate-200">
-                <td className="px-4 py-3">
-                  <Link href={`/devices/${device.id}`} className="font-semibold text-slate-900 hover:underline">
-                    {device.name}
-                  </Link>
-                  <div className="text-xs text-slate-500">{device.deviceCode}</div>
-                </td>
-                <td className="px-4 py-3 text-slate-600">{device.site?.name ?? "-"}</td>
-                <td className="px-4 py-3">{formatPct(device.lastFillLevelPct)}</td>
-                <td className="px-4 py-3">{formatPct(device.lastBatteryPct)}</td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-2">
-                    {full && <span className="rounded-full bg-rose-100 px-2 py-1 text-xs text-rose-700">満杯</span>}
-                    {lowBattery && (
-                      <span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-700">
-                        電池低下
-                      </span>
-                    )}
-                    {offline && (
-                      <span className="rounded-full bg-slate-200 px-2 py-1 text-xs text-slate-700">
-                        オフライン
-                      </span>
-                    )}
-                    {!full && !lowBattery && !offline && (
-                      <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-700">
-                        正常
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-slate-600">{formatDateTime(device.lastSeenAt)}</td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
-                  該当するデバイスがありません
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DeviceTable
+        rows={filtered.map(({ device, full, lowBattery, offline }) => ({
+          id: device.id,
+          name: device.name,
+          deviceCode: device.deviceCode,
+          siteName: device.site?.name ?? "-",
+          fillLevel: formatPct(device.lastFillLevelPct),
+          battery: formatPct(device.lastBatteryPct),
+          lastSeen: formatDateTime(device.lastSeenAt),
+          full,
+          lowBattery,
+          offline,
+        }))}
+        sites={sites.map((site) => ({ id: site.id, name: site.name }))}
+      />
     </div>
   );
 }

@@ -317,6 +317,17 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           setNewSiteLat(latValue);
           setNewSiteLng(lngValue);
         }}
+        selectedDevice={
+          selected ? { id: selected.id, lat: selected.lat, lng: selected.lng } : null
+        }
+        onDragEnd={(lng, lat) => {
+          const latValue = lat.toFixed(6);
+          const lngValue = lng.toFixed(6);
+          setMapClickLat(latValue);
+          setMapClickLng(lngValue);
+          setSiteLat(latValue);
+          setSiteLng(lngValue);
+        }}
       />
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <h4 className="text-sm font-semibold text-slate-900">選択中のデバイス</h4>
@@ -464,6 +475,9 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
               <p className="text-xs font-semibold text-slate-500">サイト編集</p>
               {selected.siteId ? (
                 <div className="space-y-2">
+                  <p className="text-[11px] text-slate-400">
+                    マーカーをドラッグすると座標が更新されます。
+                  </p>
                   <input
                     value={siteName}
                     onChange={(event) => setSiteName(event.target.value)}

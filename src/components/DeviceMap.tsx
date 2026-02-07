@@ -19,6 +19,8 @@ type DeviceMapProps = {
   onSelect?: (device: DeviceMapPoint) => void;
   onClear?: () => void;
   onMapClick?: (lng: number, lat: number) => void;
+  selectedDevice?: { id: string; lat: number; lng: number } | null;
+  onDragEnd?: (lng: number, lat: number) => void;
 };
 
 type DeviceGeoJson = {
@@ -42,13 +44,22 @@ type DeviceGeoJson = {
 
 const DEFAULT_CENTER: [number, number] = [139.6917, 35.6895];
 
-export function DeviceMap({ devices, onSelect, onClear, onMapClick }: DeviceMapProps) {
+export function DeviceMap({
+  devices,
+  onSelect,
+  onClear,
+  onMapClick,
+  selectedDevice,
+  onDragEnd,
+}: DeviceMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markerRef = useRef<mapboxgl.Marker | null>(null);
   const devicesRef = useRef<DeviceMapPoint[]>(devices);
   const onSelectRef = useRef<DeviceMapProps["onSelect"]>(undefined);
   const onClearRef = useRef<DeviceMapProps["onClear"]>(undefined);
   const onMapClickRef = useRef<DeviceMapProps["onMapClick"]>(undefined);
+  const onDragEndRef = useRef<DeviceMapProps["onDragEnd"]>(undefined);
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   useEffect(() => {
@@ -66,6 +77,10 @@ export function DeviceMap({ devices, onSelect, onClear, onMapClick }: DeviceMapP
   useEffect(() => {
     onMapClickRef.current = onMapClick;
   }, [onMapClick]);
+
+  useEffect(() => {
+    onDragEndRef.current = onDragEnd;
+  }, [onDragEnd]);
 
   const geojson: DeviceGeoJson = useMemo(
     () => ({
@@ -249,6 +264,29 @@ export function DeviceMap({ devices, onSelect, onClear, onMapClick }: DeviceMapP
       source.setData(geojson);
     }
   }, [geojson]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!selectedDevice) {
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+      return;
+    }
+
+    if (!markerRef.current) {
+      markerRef.current = new mapboxgl.Marker({ color: "#2563eb", draggable: true }).addTo(map);
+      markerRef.current.on("dragend", () => {
+        const lngLat = markerRef.current?.getLngLat();
+        if (!lngLat) return;
+        onDragEndRef.current?.(lngLat.lng, lngLat.lat);
+      });
+    }
+
+    markerRef.current.setLngLat([selectedDevice.lng, selectedDevice.lat]);
+  }, [selectedDevice]);
 
   if (!token) {
     return (
