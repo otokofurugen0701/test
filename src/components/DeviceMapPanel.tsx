@@ -60,6 +60,8 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
   const [isResolvingWithTask, startResolvingWithTask] = useTransition();
   const [resolvingWithTaskId, setResolvingWithTaskId] = useState<string | null>(null);
+  const [isAutoSavingSite, startAutoSavingSite] = useTransition();
+  const [isCreatingDevice, startCreatingDevice] = useTransition();
   const [autoCreateTask, setAutoCreateTask] = useState(false);
   const lastAutoCreatedId = useRef<string | null>(null);
 
@@ -102,6 +104,13 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [mapClickLat, setMapClickLat] = useState("");
   const [mapClickLng, setMapClickLng] = useState("");
 
+  const [newDeviceCode, setNewDeviceCode] = useState("");
+  const [newDeviceName, setNewDeviceName] = useState("");
+  const [newDeviceStatus, setNewDeviceStatus] = useState("ACTIVE");
+  const [newDeviceSiteId, setNewDeviceSiteId] = useState("");
+  const [newDeviceAssigneeId, setNewDeviceAssigneeId] = useState("");
+  const [newDeviceNotes, setNewDeviceNotes] = useState("");
+
   useEffect(() => {
     if (!selected) return;
     setDeviceStatus(selected.deviceStatus);
@@ -136,6 +145,8 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     );
     setAlertSeverity("MEDIUM");
     setAlertDetails("");
+    setNewDeviceSiteId(selected.siteId ?? "");
+    setNewDeviceAssigneeId(selected.responsibleUserId ?? "");
   }, [selected]);
 
   useEffect(() => {
@@ -272,6 +283,21 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     });
   };
 
+  const autoSaveSiteLocation = (lat: string, lng: string) => {
+    if (!selected?.siteId) return;
+    startAutoSavingSite(async () => {
+      await fetch(`/api/sites/${selected.siteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lat: toNullableNumber(lat),
+          lng: toNullableNumber(lng),
+        }),
+      });
+      router.refresh();
+    });
+  };
+
   const onCreateSite = () => {
     if (!newSiteName || !newSiteLat || !newSiteLng) return;
     startSavingSite(async () => {
@@ -303,6 +329,31 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     });
   };
 
+  const onCreateDevice = () => {
+    if (!newDeviceCode || !newDeviceName) return;
+    startCreatingDevice(async () => {
+      await fetch("/api/devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceCode: newDeviceCode,
+          name: newDeviceName,
+          status: newDeviceStatus,
+          siteId: newDeviceSiteId || null,
+          responsibleUserId: newDeviceAssigneeId || null,
+          notes: newDeviceNotes || null,
+        }),
+      });
+      setNewDeviceCode("");
+      setNewDeviceName("");
+      setNewDeviceStatus("ACTIVE");
+      setNewDeviceSiteId("");
+      setNewDeviceAssigneeId("");
+      setNewDeviceNotes("");
+      router.refresh();
+    });
+  };
+
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
       <DeviceMap
@@ -327,6 +378,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           setMapClickLng(lngValue);
           setSiteLat(latValue);
           setSiteLng(lngValue);
+          autoSaveSiteLocation(latValue, lngValue);
         }}
       />
       <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -514,6 +566,9 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
                     >
                       地図クリック座標を反映
                     </button>
+                  {isAutoSavingSite && (
+                    <p className="text-[11px] text-slate-400">座標を保存しています...</p>
+                  )}
                   )}
                   <input
                     value={siteNotes}
@@ -695,6 +750,68 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
             className="w-full rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {isSavingSite ? "作成中..." : "サイト作成"}
+          </button>
+        </div>
+
+        <div className="space-y-2 border-t border-slate-200 pt-3">
+          <p className="text-xs font-semibold text-slate-500">地図からデバイス新規作成</p>
+          <input
+            value={newDeviceCode}
+            onChange={(event) => setNewDeviceCode(event.target.value)}
+            placeholder="デバイスID"
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          />
+          <input
+            value={newDeviceName}
+            onChange={(event) => setNewDeviceName(event.target.value)}
+            placeholder="名称"
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          />
+          <select
+            value={newDeviceStatus}
+            onChange={(event) => setNewDeviceStatus(event.target.value)}
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          >
+            <option value="ACTIVE">稼働中</option>
+            <option value="INACTIVE">停止</option>
+            <option value="MAINTENANCE">保守中</option>
+          </select>
+          <select
+            value={newDeviceSiteId}
+            onChange={(event) => setNewDeviceSiteId(event.target.value)}
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          >
+            <option value="">サイト未設定</option>
+            {sites.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={newDeviceAssigneeId}
+            onChange={(event) => setNewDeviceAssigneeId(event.target.value)}
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          >
+            <option value="">担当者未設定</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name}
+              </option>
+            ))}
+          </select>
+          <input
+            value={newDeviceNotes}
+            onChange={(event) => setNewDeviceNotes(event.target.value)}
+            placeholder="メモ"
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          />
+          <button
+            onClick={onCreateDevice}
+            disabled={isCreatingDevice}
+            className="w-full rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {isCreatingDevice ? "作成中..." : "デバイス作成"}
           </button>
         </div>
       </div>

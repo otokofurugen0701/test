@@ -230,6 +230,7 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
           offline,
         }))}
         sites={sites.map((site) => ({ id: site.id, name: site.name }))}
+        users={users.map((user) => ({ id: user.id, name: user.name ?? user.email }))}
       />
     </div>
   );
