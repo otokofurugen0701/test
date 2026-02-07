@@ -62,6 +62,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [resolvingWithTaskId, setResolvingWithTaskId] = useState<string | null>(null);
   const [isAutoSavingSite, startAutoSavingSite] = useTransition();
   const [isCreatingDevice, startCreatingDevice] = useTransition();
+  const [createNewSiteOnDrag, setCreateNewSiteOnDrag] = useState(false);
   const [autoCreateTask, setAutoCreateTask] = useState(false);
   const lastAutoCreatedId = useRef<string | null>(null);
 
@@ -298,6 +299,32 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     });
   };
 
+  const createSiteFromDrag = async (lat: string, lng: string) => {
+    if (!selected) return;
+    const name = selected.siteName
+      ? `${selected.siteName}（移設）`
+      : `${selected.name} サイト`;
+    const response = await fetch("/api/sites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        address: selected.address ?? null,
+        lat: toNullableNumber(lat),
+        lng: toNullableNumber(lng),
+        notes: selected.siteNotes ?? null,
+      }),
+    });
+    const payload = await response.json();
+    const newSiteId = payload?.data?.id;
+    if (!newSiteId) return;
+    await fetch(`/api/devices/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ siteId: newSiteId }),
+    });
+  };
+
   const onCreateSite = () => {
     if (!newSiteName || !newSiteLat || !newSiteLng) return;
     startSavingSite(async () => {
@@ -374,11 +401,25 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
         onDragEnd={(lng, lat) => {
           const latValue = lat.toFixed(6);
           const lngValue = lng.toFixed(6);
+          const message = createNewSiteOnDrag
+            ? "このデバイス用に新しいサイトを作成しますか？"
+            : "このサイトの座標を更新しますか？同じサイトの全デバイスに影響します。";
+          if (!window.confirm(message)) {
+            return false;
+          }
           setMapClickLat(latValue);
           setMapClickLng(lngValue);
           setSiteLat(latValue);
           setSiteLng(lngValue);
-          autoSaveSiteLocation(latValue, lngValue);
+          if (createNewSiteOnDrag) {
+            startAutoSavingSite(async () => {
+              await createSiteFromDrag(latValue, lngValue);
+              router.refresh();
+            });
+          } else {
+            autoSaveSiteLocation(latValue, lngValue);
+          }
+          return true;
         }}
       />
       <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -557,19 +598,29 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
                     />
                   </div>
                   {mapClickLat && mapClickLng && (
-                    <button
-                      onClick={() => {
-                        setSiteLat(mapClickLat);
-                        setSiteLng(mapClickLng);
-                      }}
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-                    >
-                      地図クリック座標を反映
-                    </button>
-                  {isAutoSavingSite && (
-                    <p className="text-[11px] text-slate-400">座標を保存しています...</p>
+                    <div className="space-y-1">
+                      <button
+                        onClick={() => {
+                          setSiteLat(mapClickLat);
+                          setSiteLng(mapClickLng);
+                        }}
+                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                      >
+                        地図クリック座標を反映
+                      </button>
+                      {isAutoSavingSite && (
+                        <p className="text-[11px] text-slate-400">座標を保存しています...</p>
+                      )}
+                    </div>
                   )}
-                  )}
+                  <label className="flex items-center gap-2 text-xs text-slate-500">
+                    <input
+                      type="checkbox"
+                      checked={createNewSiteOnDrag}
+                      onChange={(event) => setCreateNewSiteOnDrag(event.target.checked)}
+                    />
+                    ドラッグ時に新サイトを自動生成
+                  </label>
                   <input
                     value={siteNotes}
                     onChange={(event) => setSiteNotes(event.target.value)}

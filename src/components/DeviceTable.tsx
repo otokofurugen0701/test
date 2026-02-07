@@ -30,6 +30,7 @@ export function DeviceTable({ rows, sites, users }: DeviceTableProps) {
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkSiteId, setBulkSiteId] = useState("");
   const [bulkAssigneeId, setBulkAssigneeId] = useState("");
+  const [bulkStatus, setBulkStatus] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const allSelected = useMemo(() => rows.length > 0 && selected.length === rows.length, [rows, selected]);
@@ -66,6 +67,20 @@ export function DeviceTable({ rows, sites, users }: DeviceTableProps) {
       });
       setSelected([]);
       setBulkAssigneeId("");
+      router.refresh();
+    });
+  };
+
+  const bulkUpdateStatus = (status: string | null) => {
+    if (selected.length === 0) return;
+    startTransition(async () => {
+      await fetch("/api/devices/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceIds: selected, status }),
+      });
+      setSelected([]);
+      setBulkStatus("");
       router.refresh();
     });
   };
@@ -127,6 +142,23 @@ export function DeviceTable({ rows, sites, users }: DeviceTableProps) {
               className="rounded-md border border-emerald-200 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
             >
               担当者解除
+            </button>
+            <select
+              value={bulkStatus}
+              onChange={(event) => setBulkStatus(event.target.value)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="">ステータスを選択</option>
+              <option value="ACTIVE">稼働中</option>
+              <option value="INACTIVE">停止</option>
+              <option value="MAINTENANCE">保守中</option>
+            </select>
+            <button
+              onClick={() => bulkUpdateStatus(bulkStatus || null)}
+              disabled={isPending || !bulkStatus}
+              className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+            >
+              ステータス変更
             </button>
           </div>
         </div>

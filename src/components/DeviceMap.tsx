@@ -20,7 +20,7 @@ type DeviceMapProps = {
   onClear?: () => void;
   onMapClick?: (lng: number, lat: number) => void;
   selectedDevice?: { id: string; lat: number; lng: number } | null;
-  onDragEnd?: (lng: number, lat: number) => void;
+  onDragEnd?: (lng: number, lat: number) => boolean | void;
 };
 
 type DeviceGeoJson = {
@@ -55,6 +55,7 @@ export function DeviceMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markerRef = useRef<mapboxgl.Marker | null>(null);
+  const dragStartRef = useRef<{ lng: number; lat: number } | null>(null);
   const devicesRef = useRef<DeviceMapPoint[]>(devices);
   const onSelectRef = useRef<DeviceMapProps["onSelect"]>(undefined);
   const onClearRef = useRef<DeviceMapProps["onClear"]>(undefined);
@@ -278,10 +279,18 @@ export function DeviceMap({
 
     if (!markerRef.current) {
       markerRef.current = new mapboxgl.Marker({ color: "#2563eb", draggable: true }).addTo(map);
+      markerRef.current.on("dragstart", () => {
+        const lngLat = markerRef.current?.getLngLat();
+        if (!lngLat) return;
+        dragStartRef.current = { lng: lngLat.lng, lat: lngLat.lat };
+      });
       markerRef.current.on("dragend", () => {
         const lngLat = markerRef.current?.getLngLat();
         if (!lngLat) return;
-        onDragEndRef.current?.(lngLat.lng, lngLat.lat);
+        const shouldKeep = onDragEndRef.current?.(lngLat.lng, lngLat.lat);
+        if (shouldKeep === false && dragStartRef.current) {
+          markerRef.current?.setLngLat([dragStartRef.current.lng, dragStartRef.current.lat]);
+        }
       });
     }
 
