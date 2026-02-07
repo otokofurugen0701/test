@@ -26,6 +26,7 @@ let tableau = [];
 let selected = null;
 
 const TABLEAU_OFFSET = 24;
+const DRAW_COUNT = 1;
 
 function buildDeck() {
   const deck = [];
@@ -220,9 +221,12 @@ function attemptMoveToFoundation(suitKey) {
 
 function handleStockClick() {
   if (stock.length) {
-    const card = stock.pop();
-    card.faceUp = true;
-    waste.push(card);
+    const drawCount = Math.min(DRAW_COUNT, stock.length);
+    for (let i = 0; i < drawCount; i += 1) {
+      const card = stock.pop();
+      card.faceUp = true;
+      waste.push(card);
+    }
   } else if (waste.length) {
     while (waste.length) {
       const card = waste.pop();
