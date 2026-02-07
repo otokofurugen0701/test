@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Othello</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app-header">
+        <h1>Othello</h1>
+        <p class="subtitle">Play classic 8x8 Reversi in your browser.</p>
+      </header>
+
+      <section class="panel">
+        <div class="status">
+          <div class="turn">
+            Turn: <span id="current-player">Black</span>
+          </div>
+          <div class="score">
+            <span>Black: <span id="black-count">2</span></span>
+            <span>White: <span id="white-count">2</span></span>
+          </div>
+        </div>
+        <div id="message" class="message"></div>
+        <div
+          id="board"
+          class="board"
+          role="grid"
+          aria-label="Othello board"
+        ></div>
+        <div class="controls">
+          <button id="reset" type="button">Restart</button>
+        </div>
+      </section>
+
+      <section class="rules">
+        <h2>How to play</h2>
+        <ul>
+          <li>Black moves first. Click a highlighted square to place a disk.</li>
+          <li>
+            Any opponent disks trapped between your new disk and another of your
+            disks flip.
+          </li>
+          <li>If a player has no legal moves, their turn is passed.</li>
+          <li>The game ends when neither player can move or the board is full.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
