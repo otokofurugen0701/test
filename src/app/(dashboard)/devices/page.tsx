@@ -4,6 +4,7 @@ import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
 import { formatDateTime, formatPct } from "@/lib/format";
 import { DeviceMapPanel } from "@/components/DeviceMapPanel";
 import { DeviceCreateForm } from "@/components/DeviceCreateForm";
+import { AlertStatus } from "@prisma/client";
 import type { DeviceStatus, Prisma } from "@prisma/client";
 
 type DevicesPageProps = {
@@ -66,6 +67,24 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
     return true;
   });
 
+  const deviceIds = filtered.map(({ device }) => device.id);
+  const openAlerts =
+    deviceIds.length > 0
+      ? await prisma.alert.findMany({
+          where: {
+            deviceId: { in: deviceIds },
+            status: { in: [AlertStatus.OPEN, AlertStatus.IN_PROGRESS] },
+          },
+          orderBy: { openedAt: "desc" },
+        })
+      : [];
+  const alertsByDevice = new Map<string, typeof openAlerts>();
+  for (const alert of openAlerts) {
+    const current = alertsByDevice.get(alert.deviceId) ?? [];
+    current.push(alert);
+    alertsByDevice.set(alert.deviceId, current);
+  }
+
   const counts = {
     total: filtered.length,
     full: filtered.filter((d) => d.full).length,
@@ -87,6 +106,12 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
       deviceCode: device.deviceCode,
       siteName: device.site?.name ?? null,
       address: device.site?.address ?? null,
+      siteLat: device.site?.lat ?? null,
+      siteLng: device.site?.lng ?? null,
+      siteNotes: device.site?.notes ?? null,
+      siteFullThresholdOverride: device.site?.fullThresholdOverride ?? null,
+      siteLowBatteryThresholdOverride: device.site?.lowBatteryThresholdOverride ?? null,
+      siteOfflineMinutesOverride: device.site?.offlineMinutesOverride ?? null,
       siteId: device.siteId ?? null,
       responsibleUserId: device.responsibleUserId ?? null,
       notes: device.notes ?? null,
@@ -94,6 +119,13 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
       lat: device.site!.lat!,
       lng: device.site!.lng!,
       status: offline ? "offline" : full ? "full" : lowBattery ? "low_battery" : "ok",
+      alerts:
+        alertsByDevice.get(device.id)?.map((alert) => ({
+          id: alert.id,
+          type: alert.type,
+          severity: alert.severity,
+          status: alert.status,
+        })) ?? [],
     }));
 
   return (

@@ -13,6 +13,12 @@ type DeviceMapPoint = {
   deviceCode: string;
   siteName?: string | null;
   address?: string | null;
+  siteLat?: number | null;
+  siteLng?: number | null;
+  siteNotes?: string | null;
+  siteFullThresholdOverride?: number | null;
+  siteLowBatteryThresholdOverride?: number | null;
+  siteOfflineMinutesOverride?: number | null;
   lat: number;
   lng: number;
   status: "ok" | "full" | "low_battery" | "offline";
@@ -20,6 +26,7 @@ type DeviceMapPoint = {
   siteId?: string | null;
   responsibleUserId?: string | null;
   notes?: string | null;
+  alerts?: Array<{ id: string; type: string; severity: string; status: string }>;
 };
 
 type DeviceMapPanelProps = {
@@ -47,6 +54,10 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isSaving, startSaving] = useTransition();
   const [isCreatingTask, startCreatingTask] = useTransition();
+  const [isSavingSite, startSavingSite] = useTransition();
+  const [isCreatingAlert, startCreatingAlert] = useTransition();
+  const [isResolvingAlert, startResolvingAlert] = useTransition();
+  const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
 
   const selected = useMemo(
     () => devices.find((device) => device.id === selectedId) ?? null,
@@ -58,10 +69,23 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [responsibleUserId, setResponsibleUserId] = useState("");
   const [notes, setNotes] = useState("");
 
+  const [siteName, setSiteName] = useState("");
+  const [siteAddress, setSiteAddress] = useState("");
+  const [siteLat, setSiteLat] = useState("");
+  const [siteLng, setSiteLng] = useState("");
+  const [siteNotes, setSiteNotes] = useState("");
+  const [siteFullThresholdOverride, setSiteFullThresholdOverride] = useState("");
+  const [siteLowBatteryThresholdOverride, setSiteLowBatteryThresholdOverride] = useState("");
+  const [siteOfflineMinutesOverride, setSiteOfflineMinutesOverride] = useState("");
+
   const [taskType, setTaskType] = useState("COLLECTION");
   const [taskAssigneeId, setTaskAssigneeId] = useState("");
   const [taskDueAt, setTaskDueAt] = useState("");
   const [taskNotes, setTaskNotes] = useState("");
+
+  const [alertType, setAlertType] = useState("FULL");
+  const [alertSeverity, setAlertSeverity] = useState("MEDIUM");
+  const [alertDetails, setAlertDetails] = useState("");
 
   useEffect(() => {
     if (!selected) return;
@@ -72,8 +96,35 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     setTaskType(selected.status === "full" ? "COLLECTION" : "MAINTENANCE");
     setTaskAssigneeId("");
     setTaskDueAt("");
-    setTaskNotes("");
+    setTaskNotes("地図から作成");
+    setSiteName(selected.siteName ?? "");
+    setSiteAddress(selected.address ?? "");
+    setSiteLat(selected.siteLat?.toString() ?? "");
+    setSiteLng(selected.siteLng?.toString() ?? "");
+    setSiteNotes(selected.siteNotes ?? "");
+    setSiteFullThresholdOverride(selected.siteFullThresholdOverride?.toString() ?? "");
+    setSiteLowBatteryThresholdOverride(selected.siteLowBatteryThresholdOverride?.toString() ?? "");
+    setSiteOfflineMinutesOverride(selected.siteOfflineMinutesOverride?.toString() ?? "");
+    setAlertType(
+      selected.status === "full"
+        ? "FULL"
+        : selected.status === "low_battery"
+          ? "LOW_BATTERY"
+          : selected.status === "offline"
+            ? "OFFLINE"
+            : "FULL"
+    );
+    setAlertSeverity("MEDIUM");
+    setAlertDetails("");
   }, [selected]);
+
+  useEffect(() => {
+    if (selectedId && !selected) {
+      setSelectedId(null);
+    }
+  }, [selectedId, selected]);
+
+  const toNullableNumber = (value: string) => (value === "" ? null : Number(value));
 
   const onSaveDevice = () => {
     if (!selected) return;
@@ -107,6 +158,58 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
         }),
       });
       setTaskNotes("");
+      router.refresh();
+    });
+  };
+
+  const onCreateAlert = () => {
+    if (!selected) return;
+    startCreatingAlert(async () => {
+      await fetch("/api/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: selected.id,
+          type: alertType,
+          severity: alertSeverity,
+          details: alertDetails ? { note: alertDetails } : null,
+        }),
+      });
+      setAlertDetails("");
+      router.refresh();
+    });
+  };
+
+  const onResolveAlert = (alertId: string) => {
+    setResolvingAlertId(alertId);
+    startResolvingAlert(async () => {
+      await fetch(`/api/alerts/${alertId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "RESOLVED" }),
+      });
+      setResolvingAlertId(null);
+      router.refresh();
+    });
+  };
+
+  const onSaveSite = () => {
+    if (!selected?.siteId) return;
+    startSavingSite(async () => {
+      await fetch(`/api/sites/${selected.siteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: siteName,
+          address: siteAddress || null,
+          lat: toNullableNumber(siteLat),
+          lng: toNullableNumber(siteLng),
+          notes: siteNotes || null,
+          fullThresholdOverride: toNullableNumber(siteFullThresholdOverride),
+          lowBatteryThresholdOverride: toNullableNumber(siteLowBatteryThresholdOverride),
+          offlineMinutesOverride: toNullableNumber(siteOfflineMinutesOverride),
+        }),
+      });
       router.refresh();
     });
   };
@@ -182,6 +285,148 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
               >
                 {isSaving ? "更新中..." : "更新"}
               </button>
+            </div>
+
+            <div className="space-y-3 border-t border-slate-200 pt-3">
+              <p className="text-xs font-semibold text-slate-500">アラート</p>
+              {selected.alerts && selected.alerts.length > 0 ? (
+                <div className="space-y-2">
+                  {selected.alerts.map((alert) => (
+                    <div
+                      key={alert.id}
+                      className="flex items-center justify-between rounded-md border border-slate-200 px-2 py-1 text-xs"
+                    >
+                      <div>
+                        <p className="font-semibold text-slate-700">{alert.type}</p>
+                        <p className="text-[11px] text-slate-500">
+                          {alert.severity} / {alert.status}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => onResolveAlert(alert.id)}
+                        disabled={isResolvingAlert && resolvingAlertId === alert.id}
+                        className="rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        {isResolvingAlert && resolvingAlertId === alert.id ? "解決中..." : "解決"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">未対応アラートはありません。</p>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-slate-400">手動アラート作成</p>
+                <select
+                  value={alertType}
+                  onChange={(event) => setAlertType(event.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  <option value="FULL">満杯</option>
+                  <option value="LOW_BATTERY">電池低下</option>
+                  <option value="OFFLINE">通信断</option>
+                </select>
+                <select
+                  value={alertSeverity}
+                  onChange={(event) => setAlertSeverity(event.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  <option value="LOW">低</option>
+                  <option value="MEDIUM">中</option>
+                  <option value="HIGH">高</option>
+                </select>
+                <input
+                  value={alertDetails}
+                  onChange={(event) => setAlertDetails(event.target.value)}
+                  placeholder="詳細メモ（任意）"
+                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                />
+                <button
+                  onClick={onCreateAlert}
+                  disabled={isCreatingAlert}
+                  className="w-full rounded-md bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  {isCreatingAlert ? "作成中..." : "アラート作成"}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t border-slate-200 pt-3">
+              <p className="text-xs font-semibold text-slate-500">サイト編集</p>
+              {selected.siteId ? (
+                <div className="space-y-2">
+                  <input
+                    value={siteName}
+                    onChange={(event) => setSiteName(event.target.value)}
+                    placeholder="サイト名"
+                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  />
+                  <input
+                    value={siteAddress}
+                    onChange={(event) => setSiteAddress(event.target.value)}
+                    placeholder="住所"
+                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      value={siteLat}
+                      onChange={(event) => setSiteLat(event.target.value)}
+                      placeholder="緯度"
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    />
+                    <input
+                      value={siteLng}
+                      onChange={(event) => setSiteLng(event.target.value)}
+                      placeholder="経度"
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    />
+                  </div>
+                  <input
+                    value={siteNotes}
+                    onChange={(event) => setSiteNotes(event.target.value)}
+                    placeholder="メモ"
+                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      value={siteFullThresholdOverride}
+                      onChange={(event) => setSiteFullThresholdOverride(event.target.value)}
+                      placeholder="満杯(%)"
+                      type="number"
+                      min={0}
+                      max={100}
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    />
+                    <input
+                      value={siteLowBatteryThresholdOverride}
+                      onChange={(event) => setSiteLowBatteryThresholdOverride(event.target.value)}
+                      placeholder="電池(%)"
+                      type="number"
+                      min={0}
+                      max={100}
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    />
+                    <input
+                      value={siteOfflineMinutesOverride}
+                      onChange={(event) => setSiteOfflineMinutesOverride(event.target.value)}
+                      placeholder="オフライン(分)"
+                      type="number"
+                      min={1}
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    />
+                  </div>
+                  <button
+                    onClick={onSaveSite}
+                    disabled={isSavingSite}
+                    className="w-full rounded-md bg-slate-800 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    {isSavingSite ? "更新中..." : "サイト更新"}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">サイト未設定のため編集できません。</p>
+              )}
             </div>
 
             <div className="space-y-2 border-t border-slate-200 pt-3">

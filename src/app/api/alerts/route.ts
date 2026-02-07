@@ -4,8 +4,10 @@ import { prisma } from "@/lib/db";
 import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
 import { syncOfflineAlert } from "@/lib/alerting";
 import type { AlertStatus, AlertType, AlertSeverity, Prisma } from "@prisma/client";
+import { AlertSeverity as AlertSeverityEnum, AlertStatus as AlertStatusEnum, AlertType as AlertTypeEnum } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -55,4 +57,62 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json({ data: alerts });
+}
+
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const deviceId = body?.deviceId as string | undefined;
+  const type = body?.type as AlertType | undefined;
+  const severity = body?.severity as AlertSeverity | undefined;
+
+  if (!deviceId || !type || !Object.values(AlertTypeEnum).includes(type)) {
+    return NextResponse.json({ error: "deviceId and valid type are required" }, { status: 400 });
+  }
+
+  const normalizedSeverity = Object.values(AlertSeverityEnum).includes(severity as AlertSeverity)
+    ? (severity as AlertSeverity)
+    : AlertSeverityEnum.MEDIUM;
+
+  const existing = await prisma.alert.findFirst({
+    where: { deviceId, type, status: { in: [AlertStatusEnum.OPEN, AlertStatusEnum.IN_PROGRESS] } },
+  });
+
+  const now = new Date();
+
+  const updatedOrCreated = existing
+    ? await prisma.alert.update({
+        where: { id: existing.id },
+        data: {
+          severity: normalizedSeverity,
+          lastEventAt: now,
+          detailsJson: body?.details ?? existing.detailsJson,
+        },
+      })
+    : await prisma.alert.create({
+        data: {
+          deviceId,
+          type,
+          severity: normalizedSeverity,
+          status: AlertStatusEnum.OPEN,
+          openedAt: now,
+          lastEventAt: now,
+          detailsJson: body?.details ?? null,
+        },
+      });
+
+  await logAudit({
+    userId: session.user.id,
+    action: existing ? "ALERT_UPDATED" : "ALERT_CREATED",
+    entityType: "Alert",
+    entityId: updatedOrCreated.id,
+    before: existing ?? undefined,
+    after: updatedOrCreated,
+  });
+
+  return NextResponse.json({ data: updatedOrCreated }, { status: existing ? 200 : 201 });
 }
