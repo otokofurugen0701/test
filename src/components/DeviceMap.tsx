@@ -21,6 +21,10 @@ type DeviceMapProps = {
   onMapClick?: (lng: number, lat: number) => void;
   selectedDevice?: { id: string; lat: number; lng: number } | null;
   onDragEnd?: (lng: number, lat: number) => boolean | void;
+  rangeBox?: {
+    start: { lat: number; lng: number };
+    end: { lat: number; lng: number };
+  } | null;
 };
 
 type DeviceGeoJson = {
@@ -51,6 +55,7 @@ export function DeviceMap({
   onMapClick,
   selectedDevice,
   onDragEnd,
+  rangeBox,
 }: DeviceMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -105,6 +110,37 @@ export function DeviceMap({
     [devices]
   );
 
+  const rangeGeojson = useMemo(() => {
+    if (!rangeBox) {
+      return { type: "FeatureCollection", features: [] } as GeoJSON.FeatureCollection;
+    }
+    const minLat = Math.min(rangeBox.start.lat, rangeBox.end.lat);
+    const maxLat = Math.max(rangeBox.start.lat, rangeBox.end.lat);
+    const minLng = Math.min(rangeBox.start.lng, rangeBox.end.lng);
+    const maxLng = Math.max(rangeBox.start.lng, rangeBox.end.lng);
+    return {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [minLng, minLat],
+                [minLng, maxLat],
+                [maxLng, maxLat],
+                [maxLng, minLat],
+                [minLng, minLat],
+              ],
+            ],
+          },
+        },
+      ],
+    } as GeoJSON.FeatureCollection;
+  }, [rangeBox]);
+
   useEffect(() => {
     if (!token || !containerRef.current || mapRef.current) return;
     mapboxgl.accessToken = token;
@@ -151,6 +187,29 @@ export function DeviceMap({
         },
         paint: {
           "text-color": "#ffffff",
+        },
+      });
+
+      map.addSource("range-box", {
+        type: "geojson",
+        data: rangeGeojson,
+      });
+      map.addLayer({
+        id: "range-box-fill",
+        type: "fill",
+        source: "range-box",
+        paint: {
+          "fill-color": "#2563eb",
+          "fill-opacity": 0.15,
+        },
+      });
+      map.addLayer({
+        id: "range-box-line",
+        type: "line",
+        source: "range-box",
+        paint: {
+          "line-color": "#2563eb",
+          "line-width": 2,
         },
       });
 
@@ -265,6 +324,15 @@ export function DeviceMap({
       source.setData(geojson);
     }
   }, [geojson]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource("range-box") as mapboxgl.GeoJSONSource | undefined;
+    if (source) {
+      source.setData(rangeGeojson);
+    }
+  }, [rangeGeojson]);
 
   useEffect(() => {
     const map = mapRef.current;

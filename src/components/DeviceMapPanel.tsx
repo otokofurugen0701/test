@@ -73,6 +73,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [rangeSelectionMode, setRangeSelectionMode] = useState(false);
   const [rangeStart, setRangeStart] = useState<{ lat: number; lng: number } | null>(null);
   const [rangeSelectedIds, setRangeSelectedIds] = useState<string[]>([]);
+  const [rangeBox, setRangeBox] = useState<{ start: { lat: number; lng: number }; end: { lat: number; lng: number } } | null>(null);
   const [autoCreateTask, setAutoCreateTask] = useState(false);
   const lastAutoCreatedId = useRef<string | null>(null);
 
@@ -493,6 +494,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           if (rangeSelectionMode) {
             if (!rangeStart) {
               setRangeStart({ lat, lng });
+              setRangeBox({ start: { lat, lng }, end: { lat, lng } });
               return;
             }
             const minLat = Math.min(rangeStart.lat, lat);
@@ -509,6 +511,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
               )
               .map((device) => device.id);
             setRangeSelectedIds(selectedIds);
+            setRangeBox({ start: rangeStart, end: { lat, lng } });
             setRangeStart(null);
             return;
           }
@@ -519,9 +522,8 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           setNewSiteLat(latValue);
           setNewSiteLng(lngValue);
         }}
-        selectedDevice={
-          selected ? { id: selected.id, lat: selected.lat, lng: selected.lng } : null
-        }
+        selectedDevice={selected ? { id: selected.id, lat: selected.lat, lng: selected.lng } : null}
+        rangeBox={rangeSelectionMode ? rangeBox : null}
         onDragEnd={(lng, lat) => {
           const latValue = lat.toFixed(6);
           const lngValue = lng.toFixed(6);
@@ -1013,6 +1015,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
                   setRangeSelectionMode(event.target.checked);
                   setRangeStart(null);
                   setRangeSelectedIds([]);
+                  setRangeBox(null);
                 }}
               />
               範囲選択モード
@@ -1035,6 +1038,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
                     onClick={() => {
                       setRangeSelectedIds([]);
                       setRangeStart(null);
+                      setRangeBox(null);
                     }}
                     className="text-[11px] text-blue-600 hover:underline"
                   >
