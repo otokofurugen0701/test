@@ -64,6 +64,10 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [isCreatingDevice, startCreatingDevice] = useTransition();
   const [createNewSiteOnDrag, setCreateNewSiteOnDrag] = useState(false);
   const [isBulkUpdatingMap, startBulkUpdatingMap] = useTransition();
+  const [bulkTaskType, setBulkTaskType] = useState("COLLECTION");
+  const [bulkTaskAssigneeId, setBulkTaskAssigneeId] = useState("");
+  const [bulkTaskDueAt, setBulkTaskDueAt] = useState("");
+  const [bulkTaskNotes, setBulkTaskNotes] = useState("地図から一括作成");
   const [autoCreateTask, setAutoCreateTask] = useState(false);
   const lastAutoCreatedId = useRef<string | null>(null);
 
@@ -423,6 +427,27 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
       });
       setBulkMapAssigneeId("");
       setBulkMapStatus("");
+      router.refresh();
+    });
+  };
+
+  const bulkCreateTasks = () => {
+    if (mapDeviceIds.length === 0) return;
+    startBulkUpdatingMap(async () => {
+      await fetch("/api/tasks/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceIds: mapDeviceIds,
+          type: bulkTaskType,
+          assigneeUserId: bulkTaskAssigneeId || null,
+          dueAt: bulkTaskDueAt || null,
+          notes: bulkTaskNotes || "地図から一括作成",
+        }),
+      });
+      setBulkTaskAssigneeId("");
+      setBulkTaskDueAt("");
+      setBulkTaskNotes("地図から一括作成");
       router.refresh();
     });
   };
@@ -965,6 +990,48 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           >
             ステータス一括変更
           </button>
+          <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
+            <p className="text-[11px] font-semibold text-slate-400">タスク一括作成</p>
+            <select
+              value={bulkTaskType}
+              onChange={(event) => setBulkTaskType(event.target.value)}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="COLLECTION">回収</option>
+              <option value="MAINTENANCE">保守</option>
+            </select>
+            <select
+              value={bulkTaskAssigneeId}
+              onChange={(event) => setBulkTaskAssigneeId(event.target.value)}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="">担当者未設定</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={bulkTaskDueAt}
+              onChange={(event) => setBulkTaskDueAt(event.target.value)}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+            <input
+              value={bulkTaskNotes}
+              onChange={(event) => setBulkTaskNotes(event.target.value)}
+              placeholder="作業メモ"
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+            <button
+              onClick={bulkCreateTasks}
+              disabled={isBulkUpdatingMap || mapDeviceIds.length === 0}
+              className="w-full rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            >
+              タスク一括作成
+            </button>
+          </div>
         </div>
       </div>
     </div>
