@@ -58,6 +58,8 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [isCreatingAlert, startCreatingAlert] = useTransition();
   const [isResolvingAlert, startResolvingAlert] = useTransition();
   const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
+  const [isResolvingWithTask, startResolvingWithTask] = useTransition();
+  const [resolvingWithTaskId, setResolvingWithTaskId] = useState<string | null>(null);
   const [autoCreateTask, setAutoCreateTask] = useState(false);
   const lastAutoCreatedId = useRef<string | null>(null);
 
@@ -97,6 +99,8 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [newSiteFullThresholdOverride, setNewSiteFullThresholdOverride] = useState("");
   const [newSiteLowBatteryThresholdOverride, setNewSiteLowBatteryThresholdOverride] = useState("");
   const [newSiteOfflineMinutesOverride, setNewSiteOfflineMinutesOverride] = useState("");
+  const [mapClickLat, setMapClickLat] = useState("");
+  const [mapClickLng, setMapClickLng] = useState("");
 
   useEffect(() => {
     if (!selected) return;
@@ -106,8 +110,13 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
     setNotes(selected.notes ?? "");
     setTaskType(selected.status === "full" ? "COLLECTION" : "MAINTENANCE");
     setTaskAssigneeId(selected.responsibleUserId ?? "");
-    setTaskDueAt("");
-    setTaskNotes("地図から作成");
+    if (selected.status === "full") {
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      setTaskDueAt(tomorrow.toISOString().slice(0, 10));
+    } else {
+      setTaskDueAt("");
+    }
+    setTaskNotes(selected.status === "full" ? "満杯回収（地図から作成）" : "地図から作成");
     setSiteName(selected.siteName ?? "");
     setSiteAddress(selected.address ?? "");
     setSiteLat(selected.siteLat?.toString() ?? "");
@@ -137,17 +146,23 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
 
   const toNullableNumber = (value: string) => (value === "" ? null : Number(value));
 
-  const createTask = async (options?: { assigneeUserId?: string | null }) => {
+  const createTask = async (options?: {
+    assigneeUserId?: string | null;
+    type?: "COLLECTION" | "MAINTENANCE";
+    notes?: string | null;
+  }) => {
     if (!selected) return;
     await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         deviceId: selected.id,
-        type: taskType,
+        type:
+          options?.type ??
+          (selected.status === "full" ? "COLLECTION" : (taskType as "COLLECTION" | "MAINTENANCE")),
         assigneeUserId: options?.assigneeUserId ?? (taskAssigneeId || null),
         dueAt: taskDueAt || null,
-        notes: taskNotes || "地図から作成",
+        notes: options?.notes ?? (taskNotes || "地図から作成"),
       }),
     });
   };
@@ -180,6 +195,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
 
   useEffect(() => {
     if (!autoCreateTask || !selected) return;
+    if (selected.status !== "full") return;
     if (lastAutoCreatedId.current === selected.id) return;
     lastAutoCreatedId.current = selected.id;
     startCreatingTask(async () => {
@@ -215,6 +231,22 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
         body: JSON.stringify({ status: "RESOLVED" }),
       });
       setResolvingAlertId(null);
+      router.refresh();
+    });
+  };
+
+  const onResolveAlertWithTask = (alertId: string) => {
+    setResolvingWithTaskId(alertId);
+    startResolvingWithTask(async () => {
+      await fetch(`/api/alerts/${alertId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "RESOLVED" }),
+      });
+      await createTask({
+        notes: taskNotes || "アラート解決後の対応",
+      });
+      setResolvingWithTaskId(null);
       router.refresh();
     });
   };
@@ -259,10 +291,14 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
       });
       setNewSiteName("");
       setNewSiteAddress("");
+      setNewSiteLat("");
+      setNewSiteLng("");
       setNewSiteNotes("");
       setNewSiteFullThresholdOverride("");
       setNewSiteLowBatteryThresholdOverride("");
       setNewSiteOfflineMinutesOverride("");
+      setMapClickLat("");
+      setMapClickLng("");
       router.refresh();
     });
   };
@@ -274,8 +310,12 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
         onSelect={(device) => setSelectedId(device.id)}
         onClear={() => setSelectedId(null)}
         onMapClick={(lng, lat) => {
-          setNewSiteLat(lat.toFixed(6));
-          setNewSiteLng(lng.toFixed(6));
+          const latValue = lat.toFixed(6);
+          const lngValue = lng.toFixed(6);
+          setMapClickLat(latValue);
+          setMapClickLng(lngValue);
+          setNewSiteLat(latValue);
+          setNewSiteLng(lngValue);
         }}
       />
       <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -359,13 +399,24 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
                           {alert.severity} / {alert.status}
                         </p>
                       </div>
-                      <button
-                        onClick={() => onResolveAlert(alert.id)}
-                        disabled={isResolvingAlert && resolvingAlertId === alert.id}
-                        className="rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-                      >
-                        {isResolvingAlert && resolvingAlertId === alert.id ? "解決中..." : "解決"}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => onResolveAlert(alert.id)}
+                          disabled={isResolvingAlert && resolvingAlertId === alert.id}
+                          className="rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                        >
+                          {isResolvingAlert && resolvingAlertId === alert.id ? "解決中..." : "解決"}
+                        </button>
+                        <button
+                          onClick={() => onResolveAlertWithTask(alert.id)}
+                          disabled={isResolvingWithTask && resolvingWithTaskId === alert.id}
+                          className="rounded-md border border-emerald-200 px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                        >
+                          {isResolvingWithTask && resolvingWithTaskId === alert.id
+                            ? "作成中..."
+                            : "解決+タスク"}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -439,6 +490,17 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
                       className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
                     />
                   </div>
+                  {mapClickLat && mapClickLng && (
+                    <button
+                      onClick={() => {
+                        setSiteLat(mapClickLat);
+                        setSiteLng(mapClickLng);
+                      }}
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                    >
+                      地図クリック座標を反映
+                    </button>
+                  )}
                   <input
                     value={siteNotes}
                     onChange={(event) => setSiteNotes(event.target.value)}
@@ -526,7 +588,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
                   checked={autoCreateTask}
                   onChange={(event) => setAutoCreateTask(event.target.checked)}
                 />
-                クリック時に自動作成（担当者は既定）
+                満杯時のみ自動回収タスク作成
               </label>
               <button
                 onClick={onCreateTask}
@@ -544,80 +606,83 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
               デバイス詳細へ
             </Link>
 
-            <div className="space-y-2 border-t border-slate-200 pt-3">
-              <p className="text-xs font-semibold text-slate-500">地図からサイト新規作成</p>
-              <input
-                value={newSiteName}
-                onChange={(event) => setNewSiteName(event.target.value)}
-                placeholder="サイト名"
-                className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
-              />
-              <input
-                value={newSiteAddress}
-                onChange={(event) => setNewSiteAddress(event.target.value)}
-                placeholder="住所"
-                className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  value={newSiteLat}
-                  onChange={(event) => setNewSiteLat(event.target.value)}
-                  placeholder="緯度（地図クリック）"
-                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
-                />
-                <input
-                  value={newSiteLng}
-                  onChange={(event) => setNewSiteLng(event.target.value)}
-                  placeholder="経度（地図クリック）"
-                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
-                />
-              </div>
-              <input
-                value={newSiteNotes}
-                onChange={(event) => setNewSiteNotes(event.target.value)}
-                placeholder="メモ"
-                className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
-              />
-              <div className="grid grid-cols-3 gap-2">
-                <input
-                  value={newSiteFullThresholdOverride}
-                  onChange={(event) => setNewSiteFullThresholdOverride(event.target.value)}
-                  placeholder="満杯(%)"
-                  type="number"
-                  min={0}
-                  max={100}
-                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
-                />
-                <input
-                  value={newSiteLowBatteryThresholdOverride}
-                  onChange={(event) => setNewSiteLowBatteryThresholdOverride(event.target.value)}
-                  placeholder="電池(%)"
-                  type="number"
-                  min={0}
-                  max={100}
-                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
-                />
-                <input
-                  value={newSiteOfflineMinutesOverride}
-                  onChange={(event) => setNewSiteOfflineMinutesOverride(event.target.value)}
-                  placeholder="オフライン(分)"
-                  type="number"
-                  min={1}
-                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
-                />
-              </div>
-              <button
-                onClick={onCreateSite}
-                disabled={isSavingSite}
-                className="w-full rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-              >
-                {isSavingSite ? "作成中..." : "サイト作成"}
-              </button>
-            </div>
           </div>
         ) : (
           <p className="mt-3 text-sm text-slate-500">地図上のポイントを選択してください。</p>
         )}
+        <div className="space-y-2 border-t border-slate-200 pt-3">
+          <p className="text-xs font-semibold text-slate-500">地図からサイト新規作成</p>
+          <p className="text-[11px] text-slate-400">
+            地図の空白をクリックすると緯度・経度が反映されます。
+          </p>
+          <input
+            value={newSiteName}
+            onChange={(event) => setNewSiteName(event.target.value)}
+            placeholder="サイト名"
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          />
+          <input
+            value={newSiteAddress}
+            onChange={(event) => setNewSiteAddress(event.target.value)}
+            placeholder="住所"
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              value={newSiteLat}
+              onChange={(event) => setNewSiteLat(event.target.value)}
+              placeholder="緯度（地図クリック）"
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+            <input
+              value={newSiteLng}
+              onChange={(event) => setNewSiteLng(event.target.value)}
+              placeholder="経度（地図クリック）"
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+          </div>
+          <input
+            value={newSiteNotes}
+            onChange={(event) => setNewSiteNotes(event.target.value)}
+            placeholder="メモ"
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+          />
+          <div className="grid grid-cols-3 gap-2">
+            <input
+              value={newSiteFullThresholdOverride}
+              onChange={(event) => setNewSiteFullThresholdOverride(event.target.value)}
+              placeholder="満杯(%)"
+              type="number"
+              min={0}
+              max={100}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+            <input
+              value={newSiteLowBatteryThresholdOverride}
+              onChange={(event) => setNewSiteLowBatteryThresholdOverride(event.target.value)}
+              placeholder="電池(%)"
+              type="number"
+              min={0}
+              max={100}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+            <input
+              value={newSiteOfflineMinutesOverride}
+              onChange={(event) => setNewSiteOfflineMinutesOverride(event.target.value)}
+              placeholder="オフライン(分)"
+              type="number"
+              min={1}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+          </div>
+          <button
+            onClick={onCreateSite}
+            disabled={isSavingSite}
+            className="w-full rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {isSavingSite ? "作成中..." : "サイト作成"}
+          </button>
+        </div>
       </div>
     </div>
   );
