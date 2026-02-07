@@ -33,8 +33,19 @@ export async function POST(request: NextRequest) {
   const dueAt = body?.dueAt ? new Date(body.dueAt) : null;
   const notes = body?.notes ?? "地図から一括作成";
 
+  const existing = await prisma.task.findMany({
+    where: {
+      deviceId: { in: deviceIds },
+      type,
+      status: { in: [TaskStatus.TODO, TaskStatus.IN_PROGRESS] },
+    },
+    select: { deviceId: true },
+  });
+  const existingSet = new Set(existing.map((item) => item.deviceId));
+  const createIds = deviceIds.filter((id: string) => !existingSet.has(id));
+
   const created = await prisma.task.createMany({
-    data: deviceIds.map((deviceId: string) => ({
+    data: createIds.map((deviceId: string) => ({
       deviceId,
       type,
       status: TaskStatus.TODO,
@@ -49,8 +60,18 @@ export async function POST(request: NextRequest) {
     action: "TASK_BULK_CREATED",
     entityType: "Task",
     entityId: deviceIds.join(","),
-    after: { count: created.count, type, assigneeUserId, dueAt, notes },
+    after: {
+      count: created.count,
+      skipped: deviceIds.length - createIds.length,
+      type,
+      assigneeUserId,
+      dueAt,
+      notes,
+    },
   });
 
-  return NextResponse.json({ createdCount: created.count });
+  return NextResponse.json({
+    createdCount: created.count,
+    skippedCount: deviceIds.length - createIds.length,
+  });
 }

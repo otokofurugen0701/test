@@ -68,6 +68,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [bulkTaskAssigneeId, setBulkTaskAssigneeId] = useState("");
   const [bulkTaskDueAt, setBulkTaskDueAt] = useState("");
   const [bulkTaskNotes, setBulkTaskNotes] = useState("地図から一括作成");
+  const [bulkTaskResult, setBulkTaskResult] = useState<{ created: number; skipped: number } | null>(null);
   const [autoCreateTask, setAutoCreateTask] = useState(false);
   const lastAutoCreatedId = useRef<string | null>(null);
 
@@ -434,7 +435,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const bulkCreateTasks = () => {
     if (mapDeviceIds.length === 0) return;
     startBulkUpdatingMap(async () => {
-      await fetch("/api/tasks/bulk", {
+      const response = await fetch("/api/tasks/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -445,9 +446,14 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           notes: bulkTaskNotes || "地図から一括作成",
         }),
       });
+      const payload = await response.json();
       setBulkTaskAssigneeId("");
       setBulkTaskDueAt("");
       setBulkTaskNotes("地図から一括作成");
+      setBulkTaskResult({
+        created: payload?.createdCount ?? 0,
+        skipped: payload?.skippedCount ?? 0,
+      });
       router.refresh();
     });
   };
@@ -992,6 +998,9 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           </button>
           <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
             <p className="text-[11px] font-semibold text-slate-400">タスク一括作成</p>
+            <p className="text-[11px] text-slate-400">
+              同種の未完了タスクがあるデバイスは自動でスキップされます。
+            </p>
             <select
               value={bulkTaskType}
               onChange={(event) => setBulkTaskType(event.target.value)}
@@ -1031,6 +1040,11 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
             >
               タスク一括作成
             </button>
+            {bulkTaskResult && (
+              <p className="text-[11px] text-slate-500">
+                作成: {bulkTaskResult.created} / スキップ: {bulkTaskResult.skipped}
+              </p>
+            )}
           </div>
         </div>
       </div>
