@@ -56,6 +56,17 @@ async function main() {
       fullThreshold: 85,
       lowBatteryThreshold: 20,
       offlineMinutes: 30,
+      taskTemplatesJson: [
+        { id: "collect-today", label: "回収（当日）", type: "COLLECTION", dueOffsetDays: 0, notes: "当日回収" },
+        { id: "collect-tomorrow", label: "回収（翌日）", type: "COLLECTION", dueOffsetDays: 1, notes: "翌日回収" },
+        { id: "battery", label: "保守（バッテリー交換）", type: "MAINTENANCE", dueOffsetDays: 2, notes: "バッテリー交換" },
+        { id: "cleaning", label: "保守（清掃）", type: "MAINTENANCE", dueOffsetDays: 3, notes: "清掃対応" },
+      ],
+      alertTemplatesJson: [
+        { id: "full", label: "満杯アラート", type: "FULL", severity: "HIGH", notes: "満杯対応" },
+        { id: "battery", label: "電池低下アラート", type: "LOW_BATTERY", severity: "MEDIUM", notes: "バッテリー確認" },
+        { id: "offline", label: "通信断アラート", type: "OFFLINE", severity: "HIGH", notes: "通信断調査" },
+      ],
     },
   });
 
