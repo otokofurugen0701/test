@@ -4,6 +4,14 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DeviceMap } from "@/components/DeviceMap";
+import {
+  AlertTemplate,
+  TaskTemplate,
+  defaultAlertTemplates,
+  defaultTaskTemplates,
+  isAlertTemplates,
+  isTaskTemplates,
+} from "@/lib/templates";
 
 type Option = { id: string; name: string };
 
@@ -28,6 +36,8 @@ type DeviceMapPoint = {
   notes?: string | null;
   alerts?: Array<{ id: string; type: string; severity: string; status: string }>;
   openTaskTypes?: string[];
+  siteTaskTemplates?: unknown;
+  siteAlertTemplates?: unknown;
 };
 
 type DeviceMapPanelProps = {
@@ -52,34 +62,6 @@ const statusColor: Record<DeviceMapPoint["status"], string> = {
   offline: "text-slate-500",
 };
 
-type TaskTemplate = {
-  id: string;
-  label: string;
-  type: "COLLECTION" | "MAINTENANCE";
-  dueOffsetDays: number;
-  notes: string;
-};
-
-type AlertTemplate = {
-  id: string;
-  label: string;
-  type: "FULL" | "LOW_BATTERY" | "OFFLINE";
-  severity: "LOW" | "MEDIUM" | "HIGH";
-  notes: string;
-};
-
-const defaultTaskTemplates: TaskTemplate[] = [
-  { id: "collect-today", label: "回収（当日）", type: "COLLECTION", dueOffsetDays: 0, notes: "当日回収" },
-  { id: "collect-tomorrow", label: "回収（翌日）", type: "COLLECTION", dueOffsetDays: 1, notes: "翌日回収" },
-  { id: "battery", label: "保守（バッテリー交換）", type: "MAINTENANCE", dueOffsetDays: 2, notes: "バッテリー交換" },
-  { id: "cleaning", label: "保守（清掃）", type: "MAINTENANCE", dueOffsetDays: 3, notes: "清掃対応" },
-];
-
-const defaultAlertTemplates: AlertTemplate[] = [
-  { id: "full", label: "満杯アラート", type: "FULL", severity: "HIGH", notes: "満杯対応" },
-  { id: "battery", label: "電池低下アラート", type: "LOW_BATTERY", severity: "MEDIUM", notes: "バッテリー確認" },
-  { id: "offline", label: "通信断アラート", type: "OFFLINE", severity: "HIGH", notes: "通信断調査" },
-];
 
 export function DeviceMapPanel({
   devices,
@@ -131,14 +113,18 @@ export function DeviceMapPanel({
     () => devices.filter((device) => targetDeviceIds.includes(device.id)),
     [devices, targetDeviceIds]
   );
-  const taskTemplateOptions = useMemo(
-    () => (taskTemplates && taskTemplates.length > 0 ? taskTemplates : defaultTaskTemplates),
-    [taskTemplates]
-  );
-  const alertTemplateOptions = useMemo(
-    () => (alertTemplates && alertTemplates.length > 0 ? alertTemplates : defaultAlertTemplates),
-    [alertTemplates]
-  );
+  const taskTemplateOptions = useMemo(() => {
+    if (!rangeSelectionMode && selected && isTaskTemplates(selected.siteTaskTemplates)) {
+      return selected.siteTaskTemplates;
+    }
+    return taskTemplates && taskTemplates.length > 0 ? taskTemplates : defaultTaskTemplates;
+  }, [rangeSelectionMode, selected, taskTemplates]);
+  const alertTemplateOptions = useMemo(() => {
+    if (!rangeSelectionMode && selected && isAlertTemplates(selected.siteAlertTemplates)) {
+      return selected.siteAlertTemplates;
+    }
+    return alertTemplates && alertTemplates.length > 0 ? alertTemplates : defaultAlertTemplates;
+  }, [rangeSelectionMode, selected, alertTemplates]);
   const bulkPreview = useMemo(() => {
     const candidates = targetDevices;
     const created: DeviceMapPoint[] = [];
@@ -1233,6 +1219,9 @@ export function DeviceMapPanel({
             <p className="text-[11px] text-slate-400">
               同種の未完了タスクがあるデバイスは自動でスキップされます。
             </p>
+            {!rangeSelectionMode && selected && isTaskTemplates(selected.siteTaskTemplates) && (
+              <p className="text-[11px] text-emerald-600">サイトテンプレートを使用中</p>
+            )}
             <select
               value={bulkTaskTemplate}
               onChange={(event) => {
@@ -1249,6 +1238,9 @@ export function DeviceMapPanel({
                 </option>
               ))}
             </select>
+            <p className="text-[11px] text-slate-500">
+              プレビュー: {bulkTaskType} / {bulkTaskDueAt || "-"} / {bulkTaskNotes || "-"}
+            </p>
             <details className="text-[11px] text-slate-500">
               <summary className="cursor-pointer text-slate-600">対象デバイス一覧</summary>
               <div className="mt-2 space-y-2">
@@ -1346,6 +1338,9 @@ export function DeviceMapPanel({
 
           <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
             <p className="text-[11px] font-semibold text-slate-400">アラート一括作成</p>
+            {!rangeSelectionMode && selected && isAlertTemplates(selected.siteAlertTemplates) && (
+              <p className="text-[11px] text-emerald-600">サイトテンプレートを使用中</p>
+            )}
             <select
               value={bulkAlertTemplate}
               onChange={(event) => {
@@ -1362,6 +1357,9 @@ export function DeviceMapPanel({
                 </option>
               ))}
             </select>
+            <p className="text-[11px] text-slate-500">
+              プレビュー: {bulkAlertType} / {bulkAlertSeverity} / {bulkAlertNotes || "-"}
+            </p>
             <select
               value={bulkAlertType}
               onChange={(event) => setBulkAlertType(event.target.value)}

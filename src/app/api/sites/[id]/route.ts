@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { isAlertTemplates, isTaskTemplates } from "@/lib/templates";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -25,6 +26,30 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
     return Number.isNaN(numberValue) ? null : numberValue;
   };
   const hasKey = (key: string) => Object.prototype.hasOwnProperty.call(body ?? {}, key);
+  const parseTemplates = (value: unknown, validator: (parsed: unknown) => boolean) => {
+    if (value === null || value === undefined || value === "") return null;
+    try {
+      const parsed = typeof value === "string" ? JSON.parse(value) : value;
+      if (!validator(parsed)) {
+        return { error: true };
+      }
+      return parsed;
+    } catch {
+      return { error: true };
+    }
+  };
+  const taskTemplatesJson = hasKey("taskTemplatesJson")
+    ? parseTemplates(body?.taskTemplatesJson, isTaskTemplates)
+    : undefined;
+  if (taskTemplatesJson && (taskTemplatesJson as { error?: boolean }).error) {
+    return NextResponse.json({ error: "Invalid task templates" }, { status: 400 });
+  }
+  const alertTemplatesJson = hasKey("alertTemplatesJson")
+    ? parseTemplates(body?.alertTemplatesJson, isAlertTemplates)
+    : undefined;
+  if (alertTemplatesJson && (alertTemplatesJson as { error?: boolean }).error) {
+    return NextResponse.json({ error: "Invalid alert templates" }, { status: 400 });
+  }
   const updated = await prisma.site.update({
     where: { id: existing.id },
     data: {
@@ -42,6 +67,18 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       offlineMinutesOverride: hasKey("offlineMinutesOverride")
         ? parseNullableNumber(body?.offlineMinutesOverride)
         : existing.offlineMinutesOverride,
+      taskTemplatesJson:
+        taskTemplatesJson === undefined
+          ? existing.taskTemplatesJson
+          : taskTemplatesJson === null
+            ? null
+            : (taskTemplatesJson as object),
+      alertTemplatesJson:
+        alertTemplatesJson === undefined
+          ? existing.alertTemplatesJson
+          : alertTemplatesJson === null
+            ? null
+            : (alertTemplatesJson as object),
     },
   });
 

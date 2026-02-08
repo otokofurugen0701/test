@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { formatJson, isAlertTemplates, isTaskTemplates } from "@/lib/templates";
 
 type SiteCardProps = {
   site: {
@@ -14,6 +15,8 @@ type SiteCardProps = {
     fullThresholdOverride: number | null;
     lowBatteryThresholdOverride: number | null;
     offlineMinutesOverride: number | null;
+    taskTemplatesJson: unknown | null;
+    alertTemplatesJson: unknown | null;
     devices: { id: string }[];
   };
   mapUrl?: string | null;
@@ -37,8 +40,36 @@ export function SiteCard({ site, mapUrl }: SiteCardProps) {
   const [offlineMinutesOverride, setOfflineMinutesOverride] = useState(
     site.offlineMinutesOverride?.toString() ?? ""
   );
+  const [taskTemplatesText, setTaskTemplatesText] = useState(
+    site.taskTemplatesJson ? formatJson(site.taskTemplatesJson) : ""
+  );
+  const [alertTemplatesText, setAlertTemplatesText] = useState(
+    site.alertTemplatesJson ? formatJson(site.alertTemplatesJson) : ""
+  );
+  const [templateError, setTemplateError] = useState<string | null>(null);
 
   const onSave = () => {
+    const parseTemplates = (value: string, validator: (parsed: unknown) => boolean) => {
+      if (!value.trim()) return null;
+      try {
+        const parsed = JSON.parse(value);
+        if (!validator(parsed)) return { error: true };
+        return parsed;
+      } catch {
+        return { error: true };
+      }
+    };
+    const taskTemplatesJson = parseTemplates(taskTemplatesText, isTaskTemplates);
+    if (taskTemplatesJson && (taskTemplatesJson as { error?: boolean }).error) {
+      setTemplateError("タスクテンプレートのJSONが不正です。");
+      return;
+    }
+    const alertTemplatesJson = parseTemplates(alertTemplatesText, isAlertTemplates);
+    if (alertTemplatesJson && (alertTemplatesJson as { error?: boolean }).error) {
+      setTemplateError("アラートテンプレートのJSONが不正です。");
+      return;
+    }
+    setTemplateError(null);
     startTransition(async () => {
       await fetch(`/api/sites/${site.id}`, {
         method: "PATCH",
@@ -52,6 +83,8 @@ export function SiteCard({ site, mapUrl }: SiteCardProps) {
           fullThresholdOverride: fullThresholdOverride ? Number(fullThresholdOverride) : null,
           lowBatteryThresholdOverride: lowBatteryThresholdOverride ? Number(lowBatteryThresholdOverride) : null,
           offlineMinutesOverride: offlineMinutesOverride ? Number(offlineMinutesOverride) : null,
+          taskTemplatesJson: taskTemplatesJson === null ? null : taskTemplatesJson,
+          alertTemplatesJson: alertTemplatesJson === null ? null : alertTemplatesJson,
         }),
       });
       setIsEditing(false);
@@ -160,6 +193,37 @@ export function SiteCard({ site, mapUrl }: SiteCardProps) {
               className="rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
           </div>
+          <details className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-500">
+              テンプレート上書き（JSON）
+            </summary>
+            <p className="mt-1 text-[11px] text-slate-400">
+              空欄の場合は全体設定のテンプレートを使用します。
+            </p>
+            <div className="mt-2 grid gap-3 md:grid-cols-2">
+              <label className="text-xs text-slate-600">
+                タスクテンプレート
+                <textarea
+                  value={taskTemplatesText}
+                  onChange={(event) => setTaskTemplatesText(event.target.value)}
+                  placeholder="[]"
+                  rows={5}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono"
+                />
+              </label>
+              <label className="text-xs text-slate-600">
+                アラートテンプレート
+                <textarea
+                  value={alertTemplatesText}
+                  onChange={(event) => setAlertTemplatesText(event.target.value)}
+                  placeholder="[]"
+                  rows={5}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono"
+                />
+              </label>
+            </div>
+            {templateError && <p className="mt-2 text-[11px] text-rose-600">{templateError}</p>}
+          </details>
           <div className="flex justify-end">
             <button
               onClick={onSave}

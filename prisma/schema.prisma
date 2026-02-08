@@ -68,6 +68,8 @@ model Site {
   fullThresholdOverride    Int?
   lowBatteryThresholdOverride Int?
   offlineMinutesOverride   Int?
+  taskTemplatesJson        Json?
+  alertTemplatesJson       Json?
   createdAt                DateTime  @default(now())
   devices                  Device[]
 }

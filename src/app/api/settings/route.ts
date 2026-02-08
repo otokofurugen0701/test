@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { isAlertTemplates, isTaskTemplates } from "@/lib/templates";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -26,53 +27,30 @@ export async function PATCH(request: NextRequest) {
   const existing = await prisma.settings.findFirst();
   const body = await request.json();
 
-  const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === "object" && value !== null;
-
-  const validateTaskTemplates = (value: unknown) =>
-    Array.isArray(value) &&
-    value.every(
-      (item) =>
-        isRecord(item) &&
-        typeof item.id === "string" &&
-        typeof item.label === "string" &&
-        (item.type === "COLLECTION" || item.type === "MAINTENANCE") &&
-        typeof item.dueOffsetDays === "number" &&
-        typeof item.notes === "string"
-    );
-
-  const validateAlertTemplates = (value: unknown) =>
-    Array.isArray(value) &&
-    value.every(
-      (item) =>
-        isRecord(item) &&
-        typeof item.id === "string" &&
-        typeof item.label === "string" &&
-        (item.type === "FULL" || item.type === "LOW_BATTERY" || item.type === "OFFLINE") &&
-        (item.severity === "LOW" || item.severity === "MEDIUM" || item.severity === "HIGH") &&
-        typeof item.notes === "string"
-    );
-
   const parseTemplates = (value: unknown, validator: (parsed: unknown) => boolean) => {
     if (value === null || value === undefined || value === "") return null;
-    const parsed = value;
-    if (!validator(parsed)) {
+    try {
+      const parsed = typeof value === "string" ? JSON.parse(value) : value;
+      if (!validator(parsed)) {
+        return { error: true };
+      }
+      return parsed;
+    } catch {
       return { error: true };
     }
-    return parsed;
   };
 
   const hasTaskTemplates = Object.prototype.hasOwnProperty.call(body ?? {}, "taskTemplatesJson");
   const hasAlertTemplates = Object.prototype.hasOwnProperty.call(body ?? {}, "alertTemplatesJson");
 
   const taskTemplatesJson = hasTaskTemplates
-    ? parseTemplates(body?.taskTemplatesJson, validateTaskTemplates)
+    ? parseTemplates(body?.taskTemplatesJson, isTaskTemplates)
     : undefined;
   if (taskTemplatesJson && (taskTemplatesJson as { error?: boolean }).error) {
     return NextResponse.json({ error: "Invalid task templates" }, { status: 400 });
   }
   const alertTemplatesJson = hasAlertTemplates
-    ? parseTemplates(body?.alertTemplatesJson, validateAlertTemplates)
+    ? parseTemplates(body?.alertTemplatesJson, isAlertTemplates)
     : undefined;
   if (alertTemplatesJson && (alertTemplatesJson as { error?: boolean }).error) {
     return NextResponse.json({ error: "Invalid alert templates" }, { status: 400 });

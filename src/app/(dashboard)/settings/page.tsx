@@ -2,7 +2,13 @@ import { prisma } from "@/lib/db";
 import { SettingsForm } from "@/components/SettingsForm";
 
 export default async function SettingsPage() {
-  const settings = await prisma.settings.findFirst();
+  const [settings, devices] = await Promise.all([
+    prisma.settings.findFirst(),
+    prisma.device.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, deviceCode: true },
+    }),
+  ]);
   const taskTemplatesText = settings?.taskTemplatesJson
     ? JSON.stringify(settings.taskTemplatesJson, null, 2)
     : undefined;
@@ -23,6 +29,10 @@ export default async function SettingsPage() {
         offlineMinutes={settings?.offlineMinutes ?? 30}
         taskTemplatesText={taskTemplatesText}
         alertTemplatesText={alertTemplatesText}
+        devices={devices.map((device) => ({
+          id: device.id,
+          name: `${device.name ?? device.deviceCode} (${device.deviceCode})`,
+        }))}
       />
     </div>
   );

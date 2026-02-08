@@ -1,7 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import {
+  AlertTemplate,
+  TaskTemplate,
+  defaultAlertTemplates,
+  defaultTaskTemplates,
+  formatJson,
+  isAlertTemplates,
+  isTaskTemplates,
+  parseTemplateText,
+} from "@/lib/templates";
 
 type SettingsFormProps = {
   fullThreshold: number;
@@ -9,75 +19,11 @@ type SettingsFormProps = {
   offlineMinutes: number;
   taskTemplatesText?: string;
   alertTemplatesText?: string;
+  devices: { id: string; name: string }[];
 };
 
-type TaskTemplate = {
-  id: string;
-  label: string;
-  type: "COLLECTION" | "MAINTENANCE";
-  dueOffsetDays: number;
-  notes: string;
-};
-
-type AlertTemplate = {
-  id: string;
-  label: string;
-  type: "FULL" | "LOW_BATTERY" | "OFFLINE";
-  severity: "LOW" | "MEDIUM" | "HIGH";
-  notes: string;
-};
-
-const defaultTaskTemplates: TaskTemplate[] = [
-  { id: "collect-today", label: "回収（当日）", type: "COLLECTION", dueOffsetDays: 0, notes: "当日回収" },
-  { id: "collect-tomorrow", label: "回収（翌日）", type: "COLLECTION", dueOffsetDays: 1, notes: "翌日回収" },
-  { id: "battery", label: "保守（バッテリー交換）", type: "MAINTENANCE", dueOffsetDays: 2, notes: "バッテリー交換" },
-  { id: "cleaning", label: "保守（清掃）", type: "MAINTENANCE", dueOffsetDays: 3, notes: "清掃対応" },
-];
-
-const defaultAlertTemplates: AlertTemplate[] = [
-  { id: "full", label: "満杯アラート", type: "FULL", severity: "HIGH", notes: "満杯対応" },
-  { id: "battery", label: "電池低下アラート", type: "LOW_BATTERY", severity: "MEDIUM", notes: "バッテリー確認" },
-  { id: "offline", label: "通信断アラート", type: "OFFLINE", severity: "HIGH", notes: "通信断調査" },
-];
-
-const formatJson = (value: unknown) => JSON.stringify(value, null, 2);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const validateTaskTemplates = (value: unknown): value is TaskTemplate[] =>
-  Array.isArray(value) &&
-  value.every(
-    (item) =>
-      isRecord(item) &&
-      typeof item.id === "string" &&
-      typeof item.label === "string" &&
-      (item.type === "COLLECTION" || item.type === "MAINTENANCE") &&
-      typeof item.dueOffsetDays === "number" &&
-      typeof item.notes === "string"
-  );
-
-const validateAlertTemplates = (value: unknown): value is AlertTemplate[] =>
-  Array.isArray(value) &&
-  value.every(
-    (item) =>
-      isRecord(item) &&
-      typeof item.id === "string" &&
-      typeof item.label === "string" &&
-      (item.type === "FULL" || item.type === "LOW_BATTERY" || item.type === "OFFLINE") &&
-      (item.severity === "LOW" || item.severity === "MEDIUM" || item.severity === "HIGH") &&
-      typeof item.notes === "string"
-  );
-
-const parseTemplateText = <T,>(text: string, fallback: T[], validator: (value: unknown) => value is T[]) => {
-  try {
-    const parsed = JSON.parse(text);
-    if (validator(parsed)) return parsed;
-  } catch {
-    return fallback;
-  }
-  return fallback;
-};
+const validateTaskTemplates = isTaskTemplates;
+const validateAlertTemplates = isAlertTemplates;
 
 export function SettingsForm({
   fullThreshold,
@@ -85,9 +31,11 @@ export function SettingsForm({
   offlineMinutes,
   taskTemplatesText,
   alertTemplatesText,
+  devices,
 }: SettingsFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isTesting, startTesting] = useTransition();
   const [full, setFull] = useState(fullThreshold.toString());
   const [low, setLow] = useState(lowBatteryThreshold.toString());
   const [offline, setOffline] = useState(offlineMinutes.toString());
@@ -116,6 +64,10 @@ export function SettingsForm({
   const [templateError, setTemplateError] = useState<string | null>(
     initialTaskValid && initialAlertValid ? null : "テンプレートJSONが不正です。JSON編集で修正してください。"
   );
+  const [testDeviceId, setTestDeviceId] = useState("");
+  const [testTaskTemplateId, setTestTaskTemplateId] = useState("");
+  const [testAlertTemplateId, setTestAlertTemplateId] = useState("");
+  const [testMessage, setTestMessage] = useState<string | null>(null);
 
   const switchToGui = () => {
     setTemplateError(null);
@@ -158,6 +110,119 @@ export function SettingsForm({
     setAlertItems(items);
     setAlertTemplates(formatJson(items));
     setTemplateError(null);
+  };
+
+  const currentTaskTemplates = useMemo(() => {
+    if (editorMode === "GUI") return taskItems;
+    return parseTemplateText(taskTemplates, defaultTaskTemplates, validateTaskTemplates);
+  }, [editorMode, taskItems, taskTemplates]);
+
+  const currentAlertTemplates = useMemo(() => {
+    if (editorMode === "GUI") return alertItems;
+    return parseTemplateText(alertTemplates, defaultAlertTemplates, validateAlertTemplates);
+  }, [editorMode, alertItems, alertTemplates]);
+
+  const testTaskPreview = useMemo(() => {
+    const template = currentTaskTemplates.find((item) => item.id === testTaskTemplateId);
+    if (!template) return null;
+    const date = new Date();
+    date.setDate(date.getDate() + template.dueOffsetDays);
+    return {
+      type: template.type,
+      dueAt: date.toISOString().slice(0, 10),
+      notes: template.notes,
+    };
+  }, [currentTaskTemplates, testTaskTemplateId]);
+
+  const testAlertPreview = useMemo(() => {
+    const template = currentAlertTemplates.find((item) => item.id === testAlertTemplateId);
+    if (!template) return null;
+    return {
+      type: template.type,
+      severity: template.severity,
+      notes: template.notes,
+    };
+  }, [currentAlertTemplates, testAlertTemplateId]);
+
+  const exportJsonFile = (data: unknown, filename: string) => {
+    const blob = new Blob([formatJson(data)], { type: "application/json;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importJsonFile = (
+    file: File,
+    validator: (value: unknown) => boolean,
+    onSuccess: (value: unknown) => void,
+    errorMessage: string
+  ) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        if (!validator(parsed)) {
+          setTemplateError(errorMessage);
+          return;
+        }
+        onSuccess(parsed);
+        setTemplateError(null);
+      } catch {
+        setTemplateError(errorMessage);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const sendTestTask = () => {
+    if (!testDeviceId || !testTaskTemplateId) return;
+    const template = currentTaskTemplates.find((item) => item.id === testTaskTemplateId);
+    if (!template) {
+      setTestMessage("タスクテンプレートが見つかりません。");
+      return;
+    }
+    setTestMessage(null);
+    startTesting(async () => {
+      const date = new Date();
+      date.setDate(date.getDate() + template.dueOffsetDays);
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: testDeviceId,
+          type: template.type,
+          dueAt: date.toISOString(),
+          notes: template.notes,
+        }),
+      });
+      setTestMessage(response.ok ? "タスクをテスト送信しました。" : "タスクのテスト送信に失敗しました。");
+    });
+  };
+
+  const sendTestAlert = () => {
+    if (!testDeviceId || !testAlertTemplateId) return;
+    const template = currentAlertTemplates.find((item) => item.id === testAlertTemplateId);
+    if (!template) {
+      setTestMessage("アラートテンプレートが見つかりません。");
+      return;
+    }
+    setTestMessage(null);
+    startTesting(async () => {
+      const response = await fetch("/api/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: testDeviceId,
+          type: template.type,
+          severity: template.severity,
+          details: template.notes ? { note: template.notes } : null,
+        }),
+      });
+      setTestMessage(response.ok ? "アラートをテスト送信しました。" : "アラートのテスト送信に失敗しました。");
+    });
   };
 
   const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -264,6 +329,55 @@ export function SettingsForm({
           >
             JSON編集
           </button>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+          <button
+            type="button"
+            onClick={() => exportJsonFile(currentTaskTemplates, "task-templates.json")}
+            className="rounded-md border border-slate-300 px-3 py-1"
+          >
+            タスク出力
+          </button>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-1">
+            タスク取込
+            <input
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                importJsonFile(file, isTaskTemplates, (value) => updateTaskItems(value as TaskTemplate[]), "タスクテンプレートのJSONが不正です。");
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => exportJsonFile(currentAlertTemplates, "alert-templates.json")}
+            className="rounded-md border border-slate-300 px-3 py-1"
+          >
+            アラート出力
+          </button>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-1">
+            アラート取込
+            <input
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                importJsonFile(
+                  file,
+                  isAlertTemplates,
+                  (value) => updateAlertItems(value as AlertTemplate[]),
+                  "アラートテンプレートのJSONが不正です。"
+                );
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
         </div>
         {editorMode === "GUI" ? (
           <div className="space-y-4">
@@ -446,6 +560,88 @@ export function SettingsForm({
           </div>
         )}
         {templateError && <p className="text-xs text-rose-600">{templateError}</p>}
+      </div>
+
+      <div className="mt-6 space-y-3 border-t border-slate-200 pt-4">
+        <h3 className="text-sm font-semibold text-slate-900">テンプレートのテスト送信</h3>
+        <p className="text-xs text-slate-500">
+          保存前のテンプレート内容で、任意のデバイスにタスク/アラートを作成できます。
+        </p>
+        <label className="text-xs text-slate-600">
+          対象デバイス
+          <select
+            value={testDeviceId}
+            onChange={(event) => setTestDeviceId(event.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-xs"
+          >
+            <option value="">デバイスを選択</option>
+            {devices.map((device) => (
+              <option key={device.id} value={device.id}>
+                {device.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {devices.length === 0 && (
+          <p className="text-xs text-slate-400">デバイスがないためテスト送信は利用できません。</p>
+        )}
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-2 rounded-md border border-slate-200 p-3 text-xs">
+            <p className="font-semibold text-slate-700">タスクテンプレート</p>
+            <select
+              value={testTaskTemplateId}
+              onChange={(event) => setTestTaskTemplateId(event.target.value)}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="">テンプレートを選択</option>
+              {currentTaskTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-slate-500">
+              プレビュー: {testTaskPreview?.type ?? "-"} / {testTaskPreview?.dueAt ?? "-"} /{" "}
+              {testTaskPreview?.notes ?? "-"}
+            </p>
+            <button
+              type="button"
+              onClick={sendTestTask}
+              disabled={isTesting || !testDeviceId || !testTaskTemplateId}
+              className="w-full rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            >
+              タスクをテスト送信
+            </button>
+          </div>
+          <div className="space-y-2 rounded-md border border-slate-200 p-3 text-xs">
+            <p className="font-semibold text-slate-700">アラートテンプレート</p>
+            <select
+              value={testAlertTemplateId}
+              onChange={(event) => setTestAlertTemplateId(event.target.value)}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="">テンプレートを選択</option>
+              {currentAlertTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-slate-500">
+              プレビュー: {testAlertPreview?.type ?? "-"} / {testAlertPreview?.severity ?? "-"} /{" "}
+              {testAlertPreview?.notes ?? "-"}
+            </p>
+            <button
+              type="button"
+              onClick={sendTestAlert}
+              disabled={isTesting || !testDeviceId || !testAlertTemplateId}
+              className="w-full rounded-md bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            >
+              アラートをテスト送信
+            </button>
+          </div>
+        </div>
+        {testMessage && <p className="text-xs text-slate-600">{testMessage}</p>}
       </div>
 
       <div className="mt-4 flex justify-end">

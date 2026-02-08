@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { isAlertTemplates, isTaskTemplates } from "@/lib/templates";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -32,6 +33,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
 
+  const parseTemplates = (value: unknown, validator: (parsed: unknown) => boolean) => {
+    if (value === null || value === undefined || value === "") return null;
+    try {
+      const parsed = typeof value === "string" ? JSON.parse(value) : value;
+      if (!validator(parsed)) {
+        return { error: true };
+      }
+      return parsed;
+    } catch {
+      return { error: true };
+    }
+  };
+
+  const taskTemplatesJson = parseTemplates(body?.taskTemplatesJson, isTaskTemplates);
+  if (taskTemplatesJson && (taskTemplatesJson as { error?: boolean }).error) {
+    return NextResponse.json({ error: "Invalid task templates" }, { status: 400 });
+  }
+  const alertTemplatesJson = parseTemplates(body?.alertTemplatesJson, isAlertTemplates);
+  if (alertTemplatesJson && (alertTemplatesJson as { error?: boolean }).error) {
+    return NextResponse.json({ error: "Invalid alert templates" }, { status: 400 });
+  }
+
   const created = await prisma.site.create({
     data: {
       name: body.name,
@@ -51,6 +74,8 @@ export async function POST(request: NextRequest) {
         body.offlineMinutesOverride === "" || body.offlineMinutesOverride === undefined
           ? null
           : Number(body.offlineMinutesOverride),
+      taskTemplatesJson: taskTemplatesJson === null ? null : (taskTemplatesJson as object),
+      alertTemplatesJson: alertTemplatesJson === null ? null : (alertTemplatesJson as object),
     },
   });
 

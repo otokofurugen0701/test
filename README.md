@@ -276,5 +276,6 @@ curl -X POST "http://localhost:3000/api/cron/offline-sync" \
 
 - オフライン判定は `Settings` で変更可能です（デフォルト30分）。
 - サイト/デバイス単位の上書きは編集画面から設定できます。
-- タスク/アラートのテンプレートは Settings でGUI/JSON編集できます。
+- タスク/アラートのテンプレートは Settings でGUI/JSON編集・インポート/エクスポート・テスト送信できます。
+- サイト単位のテンプレート上書きは Sites の編集画面から設定できます。
 - 管理画面APIは NextAuth による認証必須です。

@@ -128,6 +128,8 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
       siteFullThresholdOverride: device.site?.fullThresholdOverride ?? null,
       siteLowBatteryThresholdOverride: device.site?.lowBatteryThresholdOverride ?? null,
       siteOfflineMinutesOverride: device.site?.offlineMinutesOverride ?? null,
+      siteTaskTemplates: device.site?.taskTemplatesJson ?? null,
+      siteAlertTemplates: device.site?.alertTemplatesJson ?? null,
       siteId: device.siteId ?? null,
       responsibleUserId: device.responsibleUserId ?? null,
       notes: device.notes ?? null,
