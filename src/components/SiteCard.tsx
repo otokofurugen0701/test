@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { TemplateOverrideEditor } from "@/components/TemplateOverrideEditor";
 import {
@@ -134,7 +135,13 @@ export function SiteCard({ site, mapUrl }: SiteCardProps) {
       <p className="mt-2 text-sm text-slate-600">{site.address ?? "住所未登録"}</p>
       <p className="mt-1 text-xs text-slate-500">{site.notes ?? "-"}</p>
       {mapUrl ? (
-        <img src={mapUrl} alt={`${site.name} map`} className="mt-4 h-40 w-full rounded-md object-cover" />
+        <Image
+          src={mapUrl}
+          alt={`${site.name} map`}
+          width={500}
+          height={240}
+          className="mt-4 h-40 w-full rounded-md object-cover"
+        />
       ) : (
         <div className="mt-4 rounded-md bg-slate-100 p-4 text-xs text-slate-500">
           MAPBOX_TOKEN と緯度/経度が設定されていません

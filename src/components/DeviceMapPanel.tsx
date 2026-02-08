@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DeviceMap } from "@/components/DeviceMap";
@@ -231,7 +231,7 @@ export function DeviceMapPanel({
 
   const toNullableNumber = (value: string) => (value === "" ? null : Number(value));
 
-  const createTask = async (options?: {
+  const createTask = useCallback(async (options?: {
     assigneeUserId?: string | null;
     type?: "COLLECTION" | "MAINTENANCE";
     notes?: string | null;
@@ -250,7 +250,7 @@ export function DeviceMapPanel({
         notes: options?.notes ?? (taskNotes || "地図から作成"),
       }),
     });
-  };
+  }, [selected, taskAssigneeId, taskDueAt, taskNotes, taskType]);
 
   const onSaveDevice = () => {
     if (!selected) return;
@@ -287,7 +287,7 @@ export function DeviceMapPanel({
       await createTask({ assigneeUserId: selected.responsibleUserId ?? taskAssigneeId || null });
       router.refresh();
     });
-  }, [autoCreateTask, selected, taskAssigneeId, taskType, taskDueAt, taskNotes]);
+  }, [autoCreateTask, selected, taskAssigneeId, taskType, taskDueAt, taskNotes, createTask, router]);
 
   const onCreateAlert = () => {
     if (!selected) return;

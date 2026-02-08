@@ -372,7 +372,7 @@ export function DeviceMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [token, devices, geojson]);
+  }, [token, devices, geojson, rangeGeojson]);
 
   useEffect(() => {
     const map = mapRef.current;
