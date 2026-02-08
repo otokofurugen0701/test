@@ -31,8 +31,9 @@ export default async function DeviceDetailPage({ params }: { params: { id: strin
     device.lastBatteryPct !== undefined &&
     device.lastBatteryPct <= thresholds.lowBatteryThreshold;
 
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const since7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const [telemetry24h, telemetry7d, sites, users, settings] = await Promise.all([
     prisma.telemetry.findMany({
       where: { deviceId: device.id, ts: { gte: since24h } },

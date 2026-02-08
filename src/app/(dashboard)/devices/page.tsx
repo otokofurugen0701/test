@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { isAlertTemplates, isTaskTemplates } from "@/lib/templates";
 import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
 import { formatDateTime, formatPct } from "@/lib/format";
 import { DeviceMapPanel } from "@/components/DeviceMapPanel";
@@ -232,12 +233,8 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
           devices={mapPoints}
           sites={sites.map((site) => ({ id: site.id, name: site.name }))}
           users={users.map((user) => ({ id: user.id, name: user.name ?? user.email }))}
-          taskTemplates={
-            Array.isArray(settings?.taskTemplatesJson) ? (settings?.taskTemplatesJson as any) : undefined
-          }
-          alertTemplates={
-            Array.isArray(settings?.alertTemplatesJson) ? (settings?.alertTemplatesJson as any) : undefined
-          }
+          taskTemplates={isTaskTemplates(settings?.taskTemplatesJson) ? settings?.taskTemplatesJson : undefined}
+          alertTemplates={isAlertTemplates(settings?.alertTemplatesJson) ? settings?.alertTemplatesJson : undefined}
         />
       </div>
 
