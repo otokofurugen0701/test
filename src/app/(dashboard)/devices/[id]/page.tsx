@@ -4,6 +4,7 @@ import { getThresholds, isOffline, resolveThresholds } from "@/lib/settings";
 import { formatDateTime, formatPct, formatTemperature } from "@/lib/format";
 import { TelemetryCharts } from "@/components/TelemetryCharts";
 import { DeviceEditForm } from "@/components/DeviceEditForm";
+import { DeviceAlertCreateForm } from "@/components/DeviceAlertCreateForm";
 
 export default async function DeviceDetailPage({ params }: { params: { id: string } }) {
   const device = await prisma.device.findUnique({
@@ -32,7 +33,7 @@ export default async function DeviceDetailPage({ params }: { params: { id: strin
 
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const [telemetry24h, telemetry7d, sites, users] = await Promise.all([
+  const [telemetry24h, telemetry7d, sites, users, settings] = await Promise.all([
     prisma.telemetry.findMany({
       where: { deviceId: device.id, ts: { gte: since24h } },
       orderBy: { ts: "asc" },
@@ -43,6 +44,7 @@ export default async function DeviceDetailPage({ params }: { params: { id: strin
     }),
     prisma.site.findMany({ orderBy: { name: "asc" } }),
     prisma.user.findMany({ orderBy: { name: "asc" } }),
+    prisma.settings.findFirst({ select: { alertTemplatesJson: true } }),
   ]);
 
   const chartData24h = telemetry24h.map((row) => ({
@@ -157,6 +159,13 @@ export default async function DeviceDetailPage({ params }: { params: { id: strin
             {device.alerts.length === 0 && (
               <p className="text-sm text-slate-500">アラートはありません</p>
             )}
+          </div>
+          <div className="mt-4 border-t border-slate-200 pt-4">
+            <DeviceAlertCreateForm
+              deviceId={device.id}
+              siteAlertTemplates={device.site?.alertTemplatesJson ?? null}
+              globalAlertTemplates={settings?.alertTemplatesJson ?? null}
+            />
           </div>
         </div>
       </div>

@@ -263,6 +263,21 @@ curl -X POST "http://localhost:3000/api/telemetry/ingest" \
 
 > `deviceCode` は seed データの `SMG-0001 / SMG-0002` を利用できます。
 
+## サイトテンプレート上書き（curl例）
+
+```bash
+curl -X PATCH "http://localhost:3000/api/sites/<siteId>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "taskTemplatesJson": [
+      { "id": "collect", "label": "回収", "type": "COLLECTION", "dueOffsetDays": 1, "notes": "翌日回収" }
+    ],
+    "alertTemplatesJson": [
+      { "id": "full", "label": "満杯", "type": "FULL", "severity": "HIGH", "notes": "満杯対応" }
+    ]
+  }'
+```
+
 ## オフライン同期（cron 例）
 
 オフライン判定は定期的に実行することで常に最新化できます。

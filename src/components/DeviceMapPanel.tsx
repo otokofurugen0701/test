@@ -162,6 +162,7 @@ export function DeviceMapPanel({
   const [alertType, setAlertType] = useState("FULL");
   const [alertSeverity, setAlertSeverity] = useState("MEDIUM");
   const [alertDetails, setAlertDetails] = useState("");
+  const [alertTemplateId, setAlertTemplateId] = useState("");
 
   const [newSiteName, setNewSiteName] = useState("");
   const [newSiteAddress, setNewSiteAddress] = useState("");
@@ -302,6 +303,7 @@ export function DeviceMapPanel({
         }),
       });
       setAlertDetails("");
+      setAlertTemplateId("");
       router.refresh();
     });
   };
@@ -597,6 +599,14 @@ export function DeviceMapPanel({
     setBulkAlertNotes(template.notes);
   };
 
+  const applyManualAlertTemplate = (templateId: string) => {
+    const template = alertTemplateOptions.find((item) => item.id === templateId);
+    if (!template) return;
+    setAlertType(template.type);
+    setAlertSeverity(template.severity);
+    setAlertDetails(template.notes);
+  };
+
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
       <DeviceMap
@@ -780,6 +790,28 @@ export function DeviceMapPanel({
 
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold text-slate-400">手動アラート作成</p>
+                {!rangeSelectionMode && selected && isAlertTemplates(selected.siteAlertTemplates) && (
+                  <p className="text-[11px] text-emerald-600">サイトテンプレートを使用中</p>
+                )}
+                <select
+                  value={alertTemplateId}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setAlertTemplateId(value);
+                    applyManualAlertTemplate(value);
+                  }}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  <option value="">テンプレートを選択</option>
+                  {alertTemplateOptions.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500">
+                  プレビュー: {alertType} / {alertSeverity} / {alertDetails || "-"}
+                </p>
                 <select
                   value={alertType}
                   onChange={(event) => setAlertType(event.target.value)}

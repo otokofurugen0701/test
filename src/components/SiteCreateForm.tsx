@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { isAlertTemplates, isTaskTemplates } from "@/lib/templates";
+import { TemplateOverrideEditor } from "@/components/TemplateOverrideEditor";
+import { defaultAlertTemplates, defaultTaskTemplates, formatJson, isAlertTemplates, isTaskTemplates } from "@/lib/templates";
 
 export function SiteCreateForm() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export function SiteCreateForm() {
   const [taskTemplatesText, setTaskTemplatesText] = useState("");
   const [alertTemplatesText, setAlertTemplatesText] = useState("");
   const [templateError, setTemplateError] = useState<string | null>(null);
+  const [templateOverrideEnabled, setTemplateOverrideEnabled] = useState(false);
 
   const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -70,6 +72,7 @@ export function SiteCreateForm() {
       setOfflineMinutesOverride("");
       setTaskTemplatesText("");
       setAlertTemplatesText("");
+      setTemplateOverrideEnabled(false);
       router.refresh();
     });
   };
@@ -170,37 +173,47 @@ export function SiteCreateForm() {
             </label>
           </div>
         </div>
-        <details className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          <summary className="cursor-pointer text-xs font-semibold text-slate-500">
-            テンプレート上書き（JSON）
-          </summary>
-          <p className="mt-1 text-[11px] text-slate-400">
-            空欄の場合は全体設定のテンプレートを使用します。
-          </p>
-          <div className="mt-2 grid gap-3 md:grid-cols-2">
-            <label className="text-xs text-slate-600">
-              タスクテンプレート
-              <textarea
-                value={taskTemplatesText}
-                onChange={(event) => setTaskTemplatesText(event.target.value)}
-                placeholder="[]"
-                rows={5}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono"
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-500">テンプレート上書き</p>
+            <label className="flex items-center gap-2 text-[11px] text-slate-500">
+              <input
+                type="checkbox"
+                checked={templateOverrideEnabled}
+                onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setTemplateOverrideEnabled(enabled);
+                  setTemplateError(null);
+                  if (enabled && !taskTemplatesText.trim() && !alertTemplatesText.trim()) {
+                    setTaskTemplatesText(formatJson(defaultTaskTemplates));
+                    setAlertTemplatesText(formatJson(defaultAlertTemplates));
+                  }
+                  if (!enabled) {
+                    setTaskTemplatesText("");
+                    setAlertTemplatesText("");
+                  }
+                }}
               />
-            </label>
-            <label className="text-xs text-slate-600">
-              アラートテンプレート
-              <textarea
-                value={alertTemplatesText}
-                onChange={(event) => setAlertTemplatesText(event.target.value)}
-                placeholder="[]"
-                rows={5}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-xs font-mono"
-              />
+              上書きを有効化
             </label>
           </div>
-          {templateError && <p className="mt-2 text-[11px] text-rose-600">{templateError}</p>}
-        </details>
+          <p className="mt-1 text-[11px] text-slate-400">
+            無効の場合は全体設定のテンプレートを使用します。
+          </p>
+          {templateOverrideEnabled ? (
+            <div className="mt-2">
+              <TemplateOverrideEditor
+                taskTemplatesText={taskTemplatesText}
+                alertTemplatesText={alertTemplatesText}
+                onTaskTemplatesTextChange={setTaskTemplatesText}
+                onAlertTemplatesTextChange={setAlertTemplatesText}
+                externalError={templateError}
+              />
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-slate-500">このサイトは全体設定を使用します。</p>
+          )}
+        </div>
       </div>
       <div className="mt-4 flex justify-end">
         <button
