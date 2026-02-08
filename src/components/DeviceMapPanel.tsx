@@ -34,6 +34,8 @@ type DeviceMapPanelProps = {
   devices: DeviceMapPoint[];
   sites: Option[];
   users: Option[];
+  taskTemplates?: TaskTemplate[];
+  alertTemplates?: AlertTemplate[];
 };
 
 const statusLabel: Record<DeviceMapPoint["status"], string> = {
@@ -50,14 +52,42 @@ const statusColor: Record<DeviceMapPoint["status"], string> = {
   offline: "text-slate-500",
 };
 
-const taskTemplates = [
+type TaskTemplate = {
+  id: string;
+  label: string;
+  type: "COLLECTION" | "MAINTENANCE";
+  dueOffsetDays: number;
+  notes: string;
+};
+
+type AlertTemplate = {
+  id: string;
+  label: string;
+  type: "FULL" | "LOW_BATTERY" | "OFFLINE";
+  severity: "LOW" | "MEDIUM" | "HIGH";
+  notes: string;
+};
+
+const defaultTaskTemplates: TaskTemplate[] = [
   { id: "collect-today", label: "回収（当日）", type: "COLLECTION", dueOffsetDays: 0, notes: "当日回収" },
   { id: "collect-tomorrow", label: "回収（翌日）", type: "COLLECTION", dueOffsetDays: 1, notes: "翌日回収" },
   { id: "battery", label: "保守（バッテリー交換）", type: "MAINTENANCE", dueOffsetDays: 2, notes: "バッテリー交換" },
   { id: "cleaning", label: "保守（清掃）", type: "MAINTENANCE", dueOffsetDays: 3, notes: "清掃対応" },
 ];
 
-export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
+const defaultAlertTemplates: AlertTemplate[] = [
+  { id: "full", label: "満杯アラート", type: "FULL", severity: "HIGH", notes: "満杯対応" },
+  { id: "battery", label: "電池低下アラート", type: "LOW_BATTERY", severity: "MEDIUM", notes: "バッテリー確認" },
+  { id: "offline", label: "通信断アラート", type: "OFFLINE", severity: "HIGH", notes: "通信断調査" },
+];
+
+export function DeviceMapPanel({
+  devices,
+  sites,
+  users,
+  taskTemplates,
+  alertTemplates,
+}: DeviceMapPanelProps) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isSaving, startSaving] = useTransition();
@@ -82,6 +112,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [bulkAlertSeverity, setBulkAlertSeverity] = useState("MEDIUM");
   const [bulkAlertNotes, setBulkAlertNotes] = useState("");
   const [bulkAlertResult, setBulkAlertResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [bulkAlertTemplate, setBulkAlertTemplate] = useState("");
   const [rangeSelectionMode, setRangeSelectionMode] = useState(false);
   const [rangeStart, setRangeStart] = useState<{ lat: number; lng: number } | null>(null);
   const [rangeSelectedIds, setRangeSelectedIds] = useState<string[]>([]);
@@ -99,6 +130,14 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const targetDevices = useMemo(
     () => devices.filter((device) => targetDeviceIds.includes(device.id)),
     [devices, targetDeviceIds]
+  );
+  const taskTemplateOptions = useMemo(
+    () => (taskTemplates && taskTemplates.length > 0 ? taskTemplates : defaultTaskTemplates),
+    [taskTemplates]
+  );
+  const alertTemplateOptions = useMemo(
+    () => (alertTemplates && alertTemplates.length > 0 ? alertTemplates : defaultAlertTemplates),
+    [alertTemplates]
   );
   const bulkPreview = useMemo(() => {
     const candidates = targetDevices;
@@ -498,7 +537,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   };
 
   const applyTemplate = (templateId: string) => {
-    const template = taskTemplates.find((item) => item.id === templateId);
+    const template = taskTemplateOptions.find((item) => item.id === templateId);
     if (!template) return;
     setBulkTaskType(template.type);
     const date = new Date();
@@ -562,6 +601,14 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
       });
       router.refresh();
     });
+  };
+
+  const applyAlertTemplate = (templateId: string) => {
+    const template = alertTemplateOptions.find((item) => item.id === templateId);
+    if (!template) return;
+    setBulkAlertType(template.type);
+    setBulkAlertSeverity(template.severity);
+    setBulkAlertNotes(template.notes);
   };
 
   return (
@@ -1196,7 +1243,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
               className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
             >
               <option value="">テンプレートを選択</option>
-              {taskTemplates.map((template) => (
+              {taskTemplateOptions.map((template) => (
                 <option key={template.id} value={template.id}>
                   {template.label}
                 </option>
@@ -1299,6 +1346,22 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
 
           <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
             <p className="text-[11px] font-semibold text-slate-400">アラート一括作成</p>
+            <select
+              value={bulkAlertTemplate}
+              onChange={(event) => {
+                const value = event.target.value;
+                setBulkAlertTemplate(value);
+                applyAlertTemplate(value);
+              }}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="">テンプレートを選択</option>
+              {alertTemplateOptions.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
             <select
               value={bulkAlertType}
               onChange={(event) => setBulkAlertType(event.target.value)}

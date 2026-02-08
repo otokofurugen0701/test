@@ -3,6 +3,12 @@ import { SettingsForm } from "@/components/SettingsForm";
 
 export default async function SettingsPage() {
   const settings = await prisma.settings.findFirst();
+  const taskTemplatesText = settings?.taskTemplatesJson
+    ? JSON.stringify(settings.taskTemplatesJson, null, 2)
+    : undefined;
+  const alertTemplatesText = settings?.alertTemplatesJson
+    ? JSON.stringify(settings.alertTemplatesJson, null, 2)
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -15,6 +21,8 @@ export default async function SettingsPage() {
         fullThreshold={settings?.fullThreshold ?? 85}
         lowBatteryThreshold={settings?.lowBatteryThreshold ?? 20}
         offlineMinutes={settings?.offlineMinutes ?? 30}
+        taskTemplatesText={taskTemplatesText}
+        alertTemplatesText={alertTemplatesText}
       />
     </div>
   );

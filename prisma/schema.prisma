@@ -162,5 +162,7 @@ model Settings {
   fullThreshold       Int      @default(85)
   lowBatteryThreshold Int      @default(20)
   offlineMinutes      Int      @default(30)
+  taskTemplatesJson   Json?
+  alertTemplatesJson  Json?
   updatedAt           DateTime @updatedAt
 }

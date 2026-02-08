@@ -20,9 +20,10 @@ type DevicesPageProps = {
 
 export default async function DevicesPage({ searchParams }: DevicesPageProps) {
   const baseThresholds = await getThresholds();
-  const [sites, users] = await Promise.all([
+  const [sites, users, settings] = await Promise.all([
     prisma.site.findMany({ orderBy: { name: "asc" } }),
     prisma.user.findMany({ orderBy: { name: "asc" } }),
+    prisma.settings.findFirst({ select: { taskTemplatesJson: true, alertTemplatesJson: true } }),
   ]);
 
   const where: Prisma.DeviceWhereInput = {};
@@ -229,6 +230,12 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
           devices={mapPoints}
           sites={sites.map((site) => ({ id: site.id, name: site.name }))}
           users={users.map((user) => ({ id: user.id, name: user.name ?? user.email }))}
+          taskTemplates={
+            Array.isArray(settings?.taskTemplatesJson) ? (settings?.taskTemplatesJson as any) : undefined
+          }
+          alertTemplates={
+            Array.isArray(settings?.alertTemplatesJson) ? (settings?.alertTemplatesJson as any) : undefined
+          }
         />
       </div>
 
