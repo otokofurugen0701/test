@@ -50,6 +50,13 @@ const statusColor: Record<DeviceMapPoint["status"], string> = {
   offline: "text-slate-500",
 };
 
+const taskTemplates = [
+  { id: "collect-today", label: "回収（当日）", type: "COLLECTION", dueOffsetDays: 0, notes: "当日回収" },
+  { id: "collect-tomorrow", label: "回収（翌日）", type: "COLLECTION", dueOffsetDays: 1, notes: "翌日回収" },
+  { id: "battery", label: "保守（バッテリー交換）", type: "MAINTENANCE", dueOffsetDays: 2, notes: "バッテリー交換" },
+  { id: "cleaning", label: "保守（清掃）", type: "MAINTENANCE", dueOffsetDays: 3, notes: "清掃対応" },
+];
+
 export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -70,6 +77,7 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
   const [bulkTaskDueAt, setBulkTaskDueAt] = useState("");
   const [bulkTaskNotes, setBulkTaskNotes] = useState("地図から一括作成");
   const [bulkTaskResult, setBulkTaskResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [bulkTaskTemplate, setBulkTaskTemplate] = useState("");
   const [bulkAlertType, setBulkAlertType] = useState("FULL");
   const [bulkAlertSeverity, setBulkAlertSeverity] = useState("MEDIUM");
   const [bulkAlertNotes, setBulkAlertNotes] = useState("");
@@ -487,6 +495,48 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
       });
       router.refresh();
     });
+  };
+
+  const applyTemplate = (templateId: string) => {
+    const template = taskTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+    setBulkTaskType(template.type);
+    const date = new Date();
+    date.setDate(date.getDate() + template.dueOffsetDays);
+    setBulkTaskDueAt(date.toISOString().slice(0, 10));
+    setBulkTaskNotes(template.notes);
+  };
+
+  const exportCsv = () => {
+    if (targetDevices.length === 0) return;
+    const header = [
+      "device_id",
+      "device_code",
+      "name",
+      "status",
+      "site",
+      "lat",
+      "lng",
+    ];
+    const rows = targetDevices.map((device) => [
+      device.id,
+      device.deviceCode,
+      device.name,
+      statusLabel[device.status],
+      device.siteName ?? "",
+      device.lat.toString(),
+      device.lng.toString(),
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `devices_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const bulkCreateAlerts = () => {
@@ -1124,11 +1174,34 @@ export function DeviceMapPanel({ devices, sites, users }: DeviceMapPanelProps) {
           >
             ステータス一括変更
           </button>
+          <button
+            onClick={exportCsv}
+            disabled={targetDeviceIds.length === 0}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+          >
+            CSV出力
+          </button>
           <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
             <p className="text-[11px] font-semibold text-slate-400">タスク一括作成</p>
             <p className="text-[11px] text-slate-400">
               同種の未完了タスクがあるデバイスは自動でスキップされます。
             </p>
+            <select
+              value={bulkTaskTemplate}
+              onChange={(event) => {
+                const value = event.target.value;
+                setBulkTaskTemplate(value);
+                applyTemplate(value);
+              }}
+              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="">テンプレートを選択</option>
+              {taskTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
             <details className="text-[11px] text-slate-500">
               <summary className="cursor-pointer text-slate-600">対象デバイス一覧</summary>
               <div className="mt-2 space-y-2">
