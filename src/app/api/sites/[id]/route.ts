@@ -8,13 +8,14 @@ import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const existing = await prisma.site.findUnique({ where: { id: context.params.id } });
+  const { id } = await context.params;
+  const existing = await prisma.site.findUnique({ where: { id } });
   if (!existing) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }
@@ -94,13 +95,14 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
   return NextResponse.json({ data: updated });
 }
 
-export async function DELETE(_request: NextRequest, context: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const existing = await prisma.site.findUnique({ where: { id: context.params.id } });
+  const { id } = await context.params;
+  const existing = await prisma.site.findUnique({ where: { id } });
   if (!existing) {
     return NextResponse.json({ error: "Site not found" }, { status: 404 });
   }

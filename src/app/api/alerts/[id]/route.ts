@@ -8,7 +8,8 @@ import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,7 +22,7 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
 
-  const existing = await prisma.alert.findUnique({ where: { id: context.params.id } });
+  const existing = await prisma.alert.findUnique({ where: { id } });
   if (!existing) {
     return NextResponse.json({ error: "Alert not found" }, { status: 404 });
   }

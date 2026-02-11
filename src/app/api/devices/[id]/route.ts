@@ -10,13 +10,13 @@ import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: NextRequest, context: { params: { id: string } }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = context.params;
+  const { id } = await context.params;
   const device = await prisma.device.findUnique({
     where: { id },
     include: {
@@ -67,14 +67,15 @@ export async function GET(_request: NextRequest, context: { params: { id: string
   });
 }
 
-export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { id } = await context.params;
   const existing = await prisma.device.findUnique({
-    where: { id: context.params.id },
+    where: { id },
     include: { site: true },
   });
   if (!existing) {
@@ -133,13 +134,14 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
   return NextResponse.json({ data: updated });
 }
 
-export async function DELETE(_request: NextRequest, context: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const existing = await prisma.device.findUnique({ where: { id: context.params.id } });
+  const { id } = await context.params;
+  const existing = await prisma.device.findUnique({ where: { id } });
   if (!existing) {
     return NextResponse.json({ error: "Device not found" }, { status: 404 });
   }
