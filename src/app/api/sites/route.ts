@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { isAlertTemplates, isTaskTemplates } from "@/lib/templates";
+import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -74,8 +75,14 @@ export async function POST(request: NextRequest) {
         body.offlineMinutesOverride === "" || body.offlineMinutesOverride === undefined
           ? null
           : Number(body.offlineMinutesOverride),
-      taskTemplatesJson: taskTemplatesJson === null ? null : (taskTemplatesJson as object),
-      alertTemplatesJson: alertTemplatesJson === null ? null : (alertTemplatesJson as object),
+      taskTemplatesJson:
+        taskTemplatesJson === null || taskTemplatesJson === undefined
+          ? Prisma.DbNull
+          : (taskTemplatesJson as object),
+      alertTemplatesJson:
+        alertTemplatesJson === null || alertTemplatesJson === undefined
+          ? Prisma.DbNull
+          : (alertTemplatesJson as object),
     },
   });
 

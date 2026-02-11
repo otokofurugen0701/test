@@ -1,4 +1,4 @@
-import { AlertSeverity, AlertStatus, AlertType, type Device } from "@prisma/client";
+import { AlertSeverity, AlertStatus, AlertType, Prisma, type Device } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { isOffline } from "@/lib/settings";
 
@@ -23,7 +23,7 @@ export async function upsertThresholdAlert(params: {
         data: {
           lastEventAt: new Date(),
           severity,
-          detailsJson: details,
+          detailsJson: details as Prisma.InputJsonValue | undefined,
         },
       });
     }
@@ -35,7 +35,7 @@ export async function upsertThresholdAlert(params: {
         status: AlertStatus.OPEN,
         openedAt: new Date(),
         lastEventAt: new Date(),
-        detailsJson: details,
+        detailsJson: details as Prisma.InputJsonValue | undefined,
       },
     });
   }

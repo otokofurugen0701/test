@@ -20,7 +20,7 @@ const telemetrySchema = z.object({
   temp_c: z.coerce.number().optional(),
   tempC: z.coerce.number().optional(),
   rssi: z.coerce.number().optional(),
-  raw: z.record(z.unknown()).optional(),
+  raw: z.record(z.string(), z.unknown()).optional(),
 });
 
 export async function POST(request: NextRequest) {

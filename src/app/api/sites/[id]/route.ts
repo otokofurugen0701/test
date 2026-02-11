@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { isAlertTemplates, isTaskTemplates } from "@/lib/templates";
+import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -70,15 +71,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         : existing.offlineMinutesOverride,
       taskTemplatesJson:
         taskTemplatesJson === undefined
-          ? existing.taskTemplatesJson
+          ? undefined
           : taskTemplatesJson === null
-            ? null
+            ? Prisma.DbNull
             : (taskTemplatesJson as object),
       alertTemplatesJson:
         alertTemplatesJson === undefined
-          ? existing.alertTemplatesJson
+          ? undefined
           : alertTemplatesJson === null
-            ? null
+            ? Prisma.DbNull
             : (alertTemplatesJson as object),
     },
   });

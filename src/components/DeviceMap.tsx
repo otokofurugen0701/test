@@ -264,6 +264,11 @@ export function DeviceMap({
         },
       });
 
+      const getPointCoordinates = (geometry: GeoJSON.Geometry): [number, number] | null => {
+        if (geometry.type !== "Point") return null;
+        return geometry.coordinates as [number, number];
+      };
+
       map.on("click", "clusters", (event) => {
         const features = map.queryRenderedFeatures(event.point, { layers: ["clusters"] });
         const clusterId = features[0]?.properties?.cluster_id;
@@ -271,8 +276,11 @@ export function DeviceMap({
         if (!clusterId || !source) return;
         source.getClusterExpansionZoom(clusterId, (err, zoom) => {
           if (err) return;
-          const [lng, lat] = (features[0].geometry as { coordinates: [number, number] }).coordinates;
-          map.easeTo({ center: [lng, lat], zoom });
+          const coordinates = getPointCoordinates(features[0].geometry);
+          if (!coordinates) return;
+          if (zoom === null || zoom === undefined) return;
+          const center: [number, number] = [Number(coordinates[0]), Number(coordinates[1])];
+          map.easeTo({ center, zoom });
         });
       });
 
@@ -287,6 +295,9 @@ export function DeviceMap({
           siteName?: string;
           address?: string;
         };
+        const coordinates = getPointCoordinates(feature.geometry);
+        if (!coordinates) return;
+        const [lng, lat] = [Number(coordinates[0]), Number(coordinates[1])];
         const selected =
           devicesRef.current.find((device) => device.id === props.id) ?? {
             id: props.id,
@@ -294,12 +305,11 @@ export function DeviceMap({
             deviceCode: props.deviceCode,
             siteName: props.siteName,
             address: props.address,
-            lat: (feature.geometry as { coordinates: [number, number] }).coordinates[1],
-            lng: (feature.geometry as { coordinates: [number, number] }).coordinates[0],
+            lat,
+            lng,
             status: props.status,
           };
         onSelectRef.current?.(selected);
-        const [lng, lat] = (feature.geometry as { coordinates: [number, number] }).coordinates;
         new mapboxgl.Popup({ offset: 12 })
           .setLngLat([lng, lat])
           .setHTML(
@@ -336,18 +346,18 @@ export function DeviceMap({
       });
 
       let selecting = false;
-      const onMouseDown = (event: mapboxgl.MapMouseEvent & mapboxgl.EventData) => {
+      const onMouseDown = (event: mapboxgl.MapMouseEvent) => {
         if (!rangeSelectionEnabledRef.current) return;
         selecting = true;
         map.dragPan.disable();
         map.getCanvas().style.cursor = "crosshair";
         onRangeStartRef.current?.(event.lngLat.lng, event.lngLat.lat);
       };
-      const onMouseMove = (event: mapboxgl.MapMouseEvent & mapboxgl.EventData) => {
+      const onMouseMove = (event: mapboxgl.MapMouseEvent) => {
         if (!selecting || !rangeSelectionEnabledRef.current) return;
         onRangeMoveRef.current?.(event.lngLat.lng, event.lngLat.lat);
       };
-      const onMouseUp = (event: mapboxgl.MapMouseEvent & mapboxgl.EventData) => {
+      const onMouseUp = (event: mapboxgl.MapMouseEvent) => {
         if (!selecting || !rangeSelectionEnabledRef.current) return;
         selecting = false;
         map.dragPan.enable();

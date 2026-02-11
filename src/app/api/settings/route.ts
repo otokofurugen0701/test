@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { isAlertTemplates, isTaskTemplates } from "@/lib/templates";
+import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -65,15 +66,15 @@ export async function PATCH(request: NextRequest) {
           offlineMinutes: body?.offlineMinutes ?? existing.offlineMinutes,
           taskTemplatesJson:
             taskTemplatesJson === undefined
-              ? existing.taskTemplatesJson
+              ? undefined
               : taskTemplatesJson === null
-                ? null
+                ? Prisma.DbNull
                 : (taskTemplatesJson as object),
           alertTemplatesJson:
             alertTemplatesJson === undefined
-              ? existing.alertTemplatesJson
+              ? undefined
               : alertTemplatesJson === null
-                ? null
+                ? Prisma.DbNull
                 : (alertTemplatesJson as object),
         },
       })
@@ -83,17 +84,13 @@ export async function PATCH(request: NextRequest) {
           lowBatteryThreshold: body?.lowBatteryThreshold ?? 20,
           offlineMinutes: body?.offlineMinutes ?? 30,
           taskTemplatesJson:
-            taskTemplatesJson === undefined
-              ? null
-              : taskTemplatesJson === null
-                ? null
-                : (taskTemplatesJson as object),
+            taskTemplatesJson === undefined || taskTemplatesJson === null
+              ? Prisma.DbNull
+              : (taskTemplatesJson as object),
           alertTemplatesJson:
-            alertTemplatesJson === undefined
-              ? null
-              : alertTemplatesJson === null
-                ? null
-                : (alertTemplatesJson as object),
+            alertTemplatesJson === undefined || alertTemplatesJson === null
+              ? Prisma.DbNull
+              : (alertTemplatesJson as object),
         },
       });
 

@@ -109,6 +109,8 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
     offline: filtered.filter((d) => d.offline).length,
   };
 
+  type MapStatus = "ok" | "full" | "low_battery" | "offline";
+
   const mapPoints = filtered
     .filter(
       ({ device }) =>
@@ -117,36 +119,39 @@ export default async function DevicesPage({ searchParams }: DevicesPageProps) {
         device.site?.lng !== null &&
         device.site?.lng !== undefined
     )
-    .map(({ device, full, lowBattery, offline }) => ({
-      id: device.id,
-      name: device.name,
-      deviceCode: device.deviceCode,
-      siteName: device.site?.name ?? null,
-      address: device.site?.address ?? null,
-      siteLat: device.site?.lat ?? null,
-      siteLng: device.site?.lng ?? null,
-      siteNotes: device.site?.notes ?? null,
-      siteFullThresholdOverride: device.site?.fullThresholdOverride ?? null,
-      siteLowBatteryThresholdOverride: device.site?.lowBatteryThresholdOverride ?? null,
-      siteOfflineMinutesOverride: device.site?.offlineMinutesOverride ?? null,
-      siteTaskTemplates: device.site?.taskTemplatesJson ?? null,
-      siteAlertTemplates: device.site?.alertTemplatesJson ?? null,
-      siteId: device.siteId ?? null,
-      responsibleUserId: device.responsibleUserId ?? null,
-      notes: device.notes ?? null,
-      deviceStatus: device.status,
-      lat: device.site!.lat!,
-      lng: device.site!.lng!,
-      status: offline ? "offline" : full ? "full" : lowBattery ? "low_battery" : "ok",
-      alerts:
-        alertsByDevice.get(device.id)?.map((alert) => ({
-          id: alert.id,
-          type: alert.type,
-          severity: alert.severity,
-          status: alert.status,
-        })) ?? [],
-      openTaskTypes: Array.from(openTasksByDevice.get(device.id) ?? []),
-    }));
+    .map(({ device, full, lowBattery, offline }) => {
+      const status: MapStatus = offline ? "offline" : full ? "full" : lowBattery ? "low_battery" : "ok";
+      return {
+        id: device.id,
+        name: device.name,
+        deviceCode: device.deviceCode,
+        siteName: device.site?.name ?? null,
+        address: device.site?.address ?? null,
+        siteLat: device.site?.lat ?? null,
+        siteLng: device.site?.lng ?? null,
+        siteNotes: device.site?.notes ?? null,
+        siteFullThresholdOverride: device.site?.fullThresholdOverride ?? null,
+        siteLowBatteryThresholdOverride: device.site?.lowBatteryThresholdOverride ?? null,
+        siteOfflineMinutesOverride: device.site?.offlineMinutesOverride ?? null,
+        siteTaskTemplates: device.site?.taskTemplatesJson ?? null,
+        siteAlertTemplates: device.site?.alertTemplatesJson ?? null,
+        siteId: device.siteId ?? null,
+        responsibleUserId: device.responsibleUserId ?? null,
+        notes: device.notes ?? null,
+        deviceStatus: device.status,
+        lat: device.site!.lat!,
+        lng: device.site!.lng!,
+        status,
+        alerts:
+          alertsByDevice.get(device.id)?.map((alert) => ({
+            id: alert.id,
+            type: alert.type,
+            severity: alert.severity,
+            status: alert.status,
+          })) ?? [],
+        openTaskTypes: Array.from(openTasksByDevice.get(device.id) ?? []),
+      };
+    });
 
   return (
     <div className="space-y-6">
