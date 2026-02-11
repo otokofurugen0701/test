@@ -1,0 +1,17 @@
+[Unit]
+Description=Smagomi Dashboard (PM2 Production)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/workspace
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/env pm2 resurrect
+ExecReload=/usr/bin/env pm2 reload smagomi-prod
+ExecStop=/usr/bin/env pm2 stop smagomi-prod
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

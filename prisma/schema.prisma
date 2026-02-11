@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+}
+
+enum DeviceStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum AlertType {
+  FULL
+  LOW_BATTERY
+  OFFLINE
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum AlertStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum TaskType {
+  COLLECTION
+  MAINTENANCE
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  passwordHash String
+  role         Role      @default(OPERATOR)
+  createdAt    DateTime  @default(now())
+  tasks        Task[]    @relation("TaskAssignee")
+  devices      Device[]  @relation("DeviceOwner")
+  auditLogs    AuditLog[]
+}
+
+model Site {
+  id                       String    @id @default(cuid())
+  name                     String
+  address                  String?
+  lat                      Float?
+  lng                      Float?
+  notes                    String?
+  fullThresholdOverride    Int?
+  lowBatteryThresholdOverride Int?
+  offlineMinutesOverride   Int?
+  taskTemplatesJson        Json?
+  alertTemplatesJson       Json?
+  createdAt                DateTime  @default(now())
+  devices                  Device[]
+}
+
+model Device {
+  id                       String        @id @default(cuid())
+  deviceCode               String        @unique
+  name                     String
+  siteId                   String?
+  site                     Site?         @relation(fields: [siteId], references: [id])
+  installedAt              DateTime?
+  status                   DeviceStatus  @default(ACTIVE)
+  lastSeenAt               DateTime?
+  lastFillLevelPct         Int?
+  lastBatteryPct           Int?
+  lastDoorOpen             Boolean?
+  lastTempC                Float?
+  lastRssi                 Float?
+  responsibleUserId        String?
+  responsibleUser          User?         @relation("DeviceOwner", fields: [responsibleUserId], references: [id])
+  notes                    String?
+  fullThresholdOverride    Int?
+  lowBatteryThresholdOverride Int?
+  offlineMinutesOverride   Int?
+  telemetry                Telemetry[]
+  alerts                   Alert[]
+  tasks                    Task[]
+  createdAt                DateTime      @default(now())
+}
+
+model Telemetry {
+  id           String   @id @default(cuid())
+  deviceId     String
+  device       Device   @relation(fields: [deviceId], references: [id])
+  ts           DateTime @default(now())
+  fillLevelPct Int?
+  batteryPct   Int?
+  doorOpen     Boolean?
+  tempC        Float?
+  rssi         Float?
+  rawJson      Json?
+
+  @@index([deviceId, ts(sort: Desc)])
+}
+
+model Alert {
+  id          String        @id @default(cuid())
+  deviceId    String
+  device      Device        @relation(fields: [deviceId], references: [id])
+  type        AlertType
+  severity    AlertSeverity @default(MEDIUM)
+  status      AlertStatus   @default(OPEN)
+  openedAt    DateTime      @default(now())
+  closedAt    DateTime?
+  lastEventAt DateTime      @default(now())
+  detailsJson Json?
+  tasks       Task[]
+
+  @@index([deviceId, type, status])
+}
+
+model Task {
+  id             String     @id @default(cuid())
+  deviceId       String
+  device         Device     @relation(fields: [deviceId], references: [id])
+  alertId        String?
+  alert          Alert?     @relation(fields: [alertId], references: [id])
+  type           TaskType
+  status         TaskStatus @default(TODO)
+  assigneeUserId String?
+  assignee       User?      @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
+  dueAt          DateTime?
+  createdAt      DateTime   @default(now())
+  completedAt    DateTime?
+  notes          String?
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  beforeJson Json?
+  afterJson  Json?
+  ts         DateTime @default(now())
+}
+
+model Settings {
+  id                  String   @id @default(cuid())
+  fullThreshold       Int      @default(85)
+  lowBatteryThreshold Int      @default(20)
+  offlineMinutes      Int      @default(30)
+  taskTemplatesJson   Json?
+  alertTemplatesJson  Json?
+  updatedAt           DateTime @updatedAt
+}

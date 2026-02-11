@@ -1,0 +1,8 @@
+[nginx-smagomi]
+enabled = true
+filter = nginx-smagomi
+action = iptables-multiport[name=nginx-smagomi, port="http,https"]
+logpath = /var/log/nginx/smagomi-access.json
+maxretry = 10
+findtime = 600
+bantime = 3600

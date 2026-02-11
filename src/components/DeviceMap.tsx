@@ -1,0 +1,445 @@
+"use client";
+
+import { useEffect, useMemo, useRef } from "react";
+import mapboxgl from "mapbox-gl";
+
+type DeviceMapPoint = {
+  id: string;
+  name: string;
+  deviceCode: string;
+  siteName?: string | null;
+  address?: string | null;
+  lat: number;
+  lng: number;
+  status: "ok" | "full" | "low_battery" | "offline";
+};
+
+type DeviceMapProps = {
+  devices: DeviceMapPoint[];
+  onSelect?: (device: DeviceMapPoint) => void;
+  onClear?: () => void;
+  onMapClick?: (lng: number, lat: number) => void;
+  selectedDevice?: { id: string; lat: number; lng: number } | null;
+  onDragEnd?: (lng: number, lat: number) => boolean | void;
+  rangeBox?: {
+    start: { lat: number; lng: number };
+    end: { lat: number; lng: number };
+  } | null;
+  rangeSelectionEnabled?: boolean;
+  onRangeStart?: (lng: number, lat: number) => void;
+  onRangeMove?: (lng: number, lat: number) => void;
+  onRangeEnd?: (lng: number, lat: number) => void;
+};
+
+type DeviceGeoJson = {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    properties: {
+      id: string;
+      name: string;
+      deviceCode: string;
+      status: DeviceMapPoint["status"];
+      siteName?: string;
+      address?: string;
+    };
+    geometry: {
+      type: "Point";
+      coordinates: [number, number];
+    };
+  }>;
+};
+
+const DEFAULT_CENTER: [number, number] = [139.6917, 35.6895];
+
+export function DeviceMap({
+  devices,
+  onSelect,
+  onClear,
+  onMapClick,
+  selectedDevice,
+  onDragEnd,
+  rangeBox,
+  rangeSelectionEnabled,
+  onRangeStart,
+  onRangeMove,
+  onRangeEnd,
+}: DeviceMapProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markerRef = useRef<mapboxgl.Marker | null>(null);
+  const dragStartRef = useRef<{ lng: number; lat: number } | null>(null);
+  const devicesRef = useRef<DeviceMapPoint[]>(devices);
+  const onSelectRef = useRef<DeviceMapProps["onSelect"]>(undefined);
+  const onClearRef = useRef<DeviceMapProps["onClear"]>(undefined);
+  const onMapClickRef = useRef<DeviceMapProps["onMapClick"]>(undefined);
+  const onDragEndRef = useRef<DeviceMapProps["onDragEnd"]>(undefined);
+  const rangeSelectionEnabledRef = useRef<boolean>(false);
+  const onRangeStartRef = useRef<DeviceMapProps["onRangeStart"]>(undefined);
+  const onRangeMoveRef = useRef<DeviceMapProps["onRangeMove"]>(undefined);
+  const onRangeEndRef = useRef<DeviceMapProps["onRangeEnd"]>(undefined);
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+  useEffect(() => {
+    devicesRef.current = devices;
+  }, [devices]);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    onClearRef.current = onClear;
+  }, [onClear]);
+
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
+
+  useEffect(() => {
+    onDragEndRef.current = onDragEnd;
+  }, [onDragEnd]);
+
+  useEffect(() => {
+    rangeSelectionEnabledRef.current = Boolean(rangeSelectionEnabled);
+  }, [rangeSelectionEnabled]);
+
+  useEffect(() => {
+    onRangeStartRef.current = onRangeStart;
+  }, [onRangeStart]);
+
+  useEffect(() => {
+    onRangeMoveRef.current = onRangeMove;
+  }, [onRangeMove]);
+
+  useEffect(() => {
+    onRangeEndRef.current = onRangeEnd;
+  }, [onRangeEnd]);
+
+  const geojson: DeviceGeoJson = useMemo(
+    () => ({
+      type: "FeatureCollection",
+      features: devices.map((device) => ({
+        type: "Feature",
+        properties: {
+          id: device.id,
+          name: device.name,
+          deviceCode: device.deviceCode,
+          status: device.status,
+          siteName: device.siteName ?? "",
+          address: device.address ?? "",
+        },
+        geometry: {
+          type: "Point",
+          coordinates: [device.lng, device.lat],
+        },
+      })),
+    }),
+    [devices]
+  );
+
+  const rangeGeojson = useMemo(() => {
+    if (!rangeBox) {
+      return { type: "FeatureCollection", features: [] } as GeoJSON.FeatureCollection;
+    }
+    const minLat = Math.min(rangeBox.start.lat, rangeBox.end.lat);
+    const maxLat = Math.max(rangeBox.start.lat, rangeBox.end.lat);
+    const minLng = Math.min(rangeBox.start.lng, rangeBox.end.lng);
+    const maxLng = Math.max(rangeBox.start.lng, rangeBox.end.lng);
+    return {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [minLng, minLat],
+                [minLng, maxLat],
+                [maxLng, maxLat],
+                [maxLng, minLat],
+                [minLng, minLat],
+              ],
+            ],
+          },
+        },
+      ],
+    } as GeoJSON.FeatureCollection;
+  }, [rangeBox]);
+
+  useEffect(() => {
+    if (!token || !containerRef.current || mapRef.current) return;
+    mapboxgl.accessToken = token;
+
+    const map = new mapboxgl.Map({
+      container: containerRef.current,
+      style: "mapbox://styles/mapbox/streets-v12",
+      center: devices.length > 0 ? [devices[0].lng, devices[0].lat] : DEFAULT_CENTER,
+      zoom: devices.length > 0 ? 11 : 9,
+    });
+
+    map.addControl(new mapboxgl.NavigationControl(), "top-right");
+
+    map.on("load", () => {
+      map.addSource("devices", {
+        type: "geojson",
+        data: geojson,
+        cluster: true,
+        clusterRadius: 50,
+        clusterMaxZoom: 14,
+      });
+
+      map.addLayer({
+        id: "clusters",
+        type: "circle",
+        source: "devices",
+        filter: ["has", "point_count"],
+        paint: {
+          "circle-color": "#1f2937",
+          "circle-radius": ["step", ["get", "point_count"], 16, 10, 20, 30, 26],
+          "circle-opacity": 0.85,
+        },
+      });
+
+      map.addLayer({
+        id: "cluster-count",
+        type: "symbol",
+        source: "devices",
+        filter: ["has", "point_count"],
+        layout: {
+          "text-field": "{point_count_abbreviated}",
+          "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+          "text-size": 12,
+        },
+        paint: {
+          "text-color": "#ffffff",
+        },
+      });
+
+      map.addSource("range-box", {
+        type: "geojson",
+        data: rangeGeojson,
+      });
+      map.addLayer({
+        id: "range-box-fill",
+        type: "fill",
+        source: "range-box",
+        paint: {
+          "fill-color": "#2563eb",
+          "fill-opacity": 0.15,
+        },
+      });
+      map.addLayer({
+        id: "range-box-line",
+        type: "line",
+        source: "range-box",
+        paint: {
+          "line-color": "#2563eb",
+          "line-width": 2,
+        },
+      });
+
+      map.addLayer({
+        id: "unclustered-point",
+        type: "circle",
+        source: "devices",
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-color": [
+            "match",
+            ["get", "status"],
+            "offline",
+            "#94a3b8",
+            "full",
+            "#f87171",
+            "low_battery",
+            "#fbbf24",
+            "#10b981",
+          ],
+          "circle-radius": 8,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 1.5,
+        },
+      });
+
+      const getPointCoordinates = (geometry: GeoJSON.Geometry): [number, number] | null => {
+        if (geometry.type !== "Point") return null;
+        return geometry.coordinates as [number, number];
+      };
+
+      map.on("click", "clusters", (event) => {
+        const features = map.queryRenderedFeatures(event.point, { layers: ["clusters"] });
+        const clusterId = features[0]?.properties?.cluster_id;
+        const source = map.getSource("devices") as mapboxgl.GeoJSONSource;
+        if (!clusterId || !source) return;
+        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return;
+          const coordinates = getPointCoordinates(features[0].geometry);
+          if (!coordinates) return;
+          if (zoom === null || zoom === undefined) return;
+          const center: [number, number] = [Number(coordinates[0]), Number(coordinates[1])];
+          map.easeTo({ center, zoom });
+        });
+      });
+
+      map.on("click", "unclustered-point", (event) => {
+        const feature = event.features?.[0];
+        if (!feature) return;
+        const props = feature.properties as {
+          id: string;
+          name: string;
+          deviceCode: string;
+          status: DeviceMapPoint["status"];
+          siteName?: string;
+          address?: string;
+        };
+        const coordinates = getPointCoordinates(feature.geometry);
+        if (!coordinates) return;
+        const [lng, lat] = [Number(coordinates[0]), Number(coordinates[1])];
+        const selected =
+          devicesRef.current.find((device) => device.id === props.id) ?? {
+            id: props.id,
+            name: props.name,
+            deviceCode: props.deviceCode,
+            siteName: props.siteName,
+            address: props.address,
+            lat,
+            lng,
+            status: props.status,
+          };
+        onSelectRef.current?.(selected);
+        new mapboxgl.Popup({ offset: 12 })
+          .setLngLat([lng, lat])
+          .setHTML(
+            `<div style="font-size:12px;">
+              <div style="font-weight:600;">${props.name}</div>
+              <div style="color:#64748b;">${props.deviceCode}</div>
+              <a href="/devices/${props.id}" style="color:#2563eb;">詳細を見る</a>
+            </div>`
+          )
+          .addTo(map);
+      });
+
+      map.on("click", (event) => {
+        const hits = map.queryRenderedFeatures(event.point, {
+          layers: ["unclustered-point", "clusters"],
+        });
+        if (hits.length === 0) {
+          onClearRef.current?.();
+          onMapClickRef.current?.(event.lngLat.lng, event.lngLat.lat);
+        }
+      });
+
+      map.on("mouseenter", "clusters", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "clusters", () => {
+        map.getCanvas().style.cursor = rangeSelectionEnabledRef.current ? "crosshair" : "";
+      });
+      map.on("mouseenter", "unclustered-point", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "unclustered-point", () => {
+        map.getCanvas().style.cursor = rangeSelectionEnabledRef.current ? "crosshair" : "";
+      });
+
+      let selecting = false;
+      const onMouseDown = (event: mapboxgl.MapMouseEvent) => {
+        if (!rangeSelectionEnabledRef.current) return;
+        selecting = true;
+        map.dragPan.disable();
+        map.getCanvas().style.cursor = "crosshair";
+        onRangeStartRef.current?.(event.lngLat.lng, event.lngLat.lat);
+      };
+      const onMouseMove = (event: mapboxgl.MapMouseEvent) => {
+        if (!selecting || !rangeSelectionEnabledRef.current) return;
+        onRangeMoveRef.current?.(event.lngLat.lng, event.lngLat.lat);
+      };
+      const onMouseUp = (event: mapboxgl.MapMouseEvent) => {
+        if (!selecting || !rangeSelectionEnabledRef.current) return;
+        selecting = false;
+        map.dragPan.enable();
+        onRangeEndRef.current?.(event.lngLat.lng, event.lngLat.lat);
+        map.getCanvas().style.cursor = rangeSelectionEnabledRef.current ? "crosshair" : "";
+      };
+
+      map.on("mousedown", onMouseDown);
+      map.on("mousemove", onMouseMove);
+      map.on("mouseup", onMouseUp);
+
+      map.once("remove", () => {
+        map.off("mousedown", onMouseDown);
+        map.off("mousemove", onMouseMove);
+        map.off("mouseup", onMouseUp);
+      });
+    });
+
+    mapRef.current = map;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [token, devices, geojson, rangeGeojson]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource("devices") as mapboxgl.GeoJSONSource | undefined;
+    if (source) {
+      source.setData(geojson);
+    }
+  }, [geojson]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource("range-box") as mapboxgl.GeoJSONSource | undefined;
+    if (source) {
+      source.setData(rangeGeojson);
+    }
+  }, [rangeGeojson]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!selectedDevice) {
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+      return;
+    }
+
+    if (!markerRef.current) {
+      markerRef.current = new mapboxgl.Marker({ color: "#2563eb", draggable: true }).addTo(map);
+      markerRef.current.on("dragstart", () => {
+        const lngLat = markerRef.current?.getLngLat();
+        if (!lngLat) return;
+        dragStartRef.current = { lng: lngLat.lng, lat: lngLat.lat };
+      });
+      markerRef.current.on("dragend", () => {
+        const lngLat = markerRef.current?.getLngLat();
+        if (!lngLat) return;
+        const shouldKeep = onDragEndRef.current?.(lngLat.lng, lngLat.lat);
+        if (shouldKeep === false && dragStartRef.current) {
+          markerRef.current?.setLngLat([dragStartRef.current.lng, dragStartRef.current.lat]);
+        }
+      });
+    }
+
+    markerRef.current.setLngLat([selectedDevice.lng, selectedDevice.lat]);
+  }, [selectedDevice]);
+
+  if (!token) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500">
+        NEXT_PUBLIC_MAPBOX_TOKEN が未設定のため、地図を表示できません。
+      </div>
+    );
+  }
+
+  return <div ref={containerRef} className="h-96 w-full rounded-lg border border-slate-200" />;
+}
