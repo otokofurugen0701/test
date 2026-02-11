@@ -284,7 +284,7 @@ export function DeviceMapPanel({
     if (lastAutoCreatedId.current === selected.id) return;
     lastAutoCreatedId.current = selected.id;
     startCreatingTask(async () => {
-      await createTask({ assigneeUserId: selected.responsibleUserId ?? taskAssigneeId || null });
+      await createTask({ assigneeUserId: selected.responsibleUserId ?? (taskAssigneeId || null) });
       router.refresh();
     });
   }, [autoCreateTask, selected, taskAssigneeId, taskType, taskDueAt, taskNotes, createTask, router]);
