@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Admin Login{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <h1>Admin Login</h1>
+  <p class="muted">Default user/password are seeded from environment variables.</p>
+  <form method="post" class="form-col">
+    <label>
+      Username
+      <input type="text" name="username" required />
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" required />
+    </label>
+    <button class="btn" type="submit">Login</button>
+  </form>
+</section>
+{% endblock %}

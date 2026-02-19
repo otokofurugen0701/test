@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Logs{% endblock %}
+{% block content %}
+<h1>Log Search</h1>
+
+<section class="panel">
+  <form method="get" action="{{ url_for('logs_page') }}" class="grid filters">
+    <label>
+      From
+      <input type="date" name="from" value="{{ filters.from }}" />
+    </label>
+    <label>
+      To
+      <input type="date" name="to" value="{{ filters.to }}" />
+    </label>
+    <label>
+      Event Type
+      <select name="event_type">
+        <option value="">all</option>
+        {% for t in event_types %}
+          <option value="{{ t.event_type }}" {% if filters.event_type == t.event_type %}selected{% endif %}>
+            {{ t.event_type }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Location
+      <select name="location_id">
+        <option value="">all</option>
+        {% for l in locations %}
+          <option value="{{ l.id }}" {% if filters.location_id == l.id|string %}selected{% endif %}>
+            {{ l.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Device
+      <select name="device_id">
+        <option value="">all</option>
+        {% for d in devices %}
+          <option value="{{ d.id }}" {% if filters.device_id == d.id|string %}selected{% endif %}>
+            {{ d.serial }} / {{ d.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="row gap">
+      <button class="btn" type="submit">Search</button>
+      <a class="btn ghost" href="{{ url_for('logs_page', from=filters.from, to=filters.to, event_type=filters.event_type, location_id=filters.location_id, device_id=filters.device_id, format='csv') }}">Export CSV</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <table>
+    <thead>
+      <tr>
+        <th>ts</th>
+        <th>type</th>
+        <th>location</th>
+        <th>device</th>
+        <th>success</th>
+        <th>error</th>
+        <th>actor</th>
+        <th>request_id</th>
+        <th>hash</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.ts }}</td>
+        <td>{{ row.event_type }}</td>
+        <td>{{ row.location_name or "-" }}</td>
+        <td>{{ row.device_serial or "-" }}</td>
+        <td>{{ row.success if row.success is not none else "-" }}</td>
+        <td>{{ row.error_reason or "-" }}</td>
+        <td>{{ row.actor or "-" }}</td>
+        <td class="small">{{ row.request_id or "-" }}</td>
+        <td class="small">{{ row.event_hash }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9">No logs</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

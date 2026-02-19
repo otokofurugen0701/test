@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Location Detail{% endblock %}
+{% block content %}
+<h1>Location: {{ location.name }}</h1>
+<p class="muted">{{ location.note or "-" }}</p>
+<p><a href="{{ url_for('patrol_checklist', location_id=location.id) }}">Open patrol checklist</a></p>
+
+<section class="grid cards">
+  <article class="card">
+    <h2>Unlock Success Today</h2>
+    <p class="value">{{ today_success }}</p>
+  </article>
+  <article class="card">
+    <h2>Failure Rate</h2>
+    <p class="value">{{ today_failure_rate }}%</p>
+  </article>
+  <article class="card">
+    <h2>Estimated Offline</h2>
+    <p class="value">{{ offline_minutes }} min</p>
+  </article>
+  <article class="card">
+    <h2>Unlock Fail Count</h2>
+    <p class="value">{{ today_fail }}</p>
+  </article>
+</section>
+
+<section class="panel">
+  <h2>Devices</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Serial</th>
+        <th>Status</th>
+        <th>Last Seen</th>
+        <th>FW</th>
+        <th>API Key</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in devices %}
+      <tr>
+        <td>{{ d.id }}</td>
+        <td>{{ d.name }}</td>
+        <td>{{ d.serial }}</td>
+        <td>
+          {% if d.online %}
+            <span class="badge ok">online</span>
+          {% else %}
+            <span class="badge error">offline</span>
+          {% endif %}
+        </td>
+        <td>{{ d.last_seen_display }}</td>
+        <td>{{ d.fw_version }}</td>
+        <td class="small">{{ d.api_key }}</td>
+        <td>
+          <button class="btn small" onclick="adminUnlock({{ d.id }})">Unlock now</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">No devices</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p id="unlock-result" class="muted"></p>
+</section>
+
+<section class="grid two">
+  <article class="panel">
+    <h2>Issue Campaign Token</h2>
+    <form method="post" action="{{ url_for('create_campaign') }}" class="form-col">
+      <input type="hidden" name="location_id" value="{{ location.id }}" />
+      <label>
+        Device
+        <select name="device_id" required>
+          {% for d in devices %}
+          <option value="{{ d.id }}">{{ d.name }} ({{ d.serial }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        LP Variant
+        <input type="text" name="lp_variant" value="A" />
+      </label>
+      <label>
+        Token(optional, auto generated if empty)
+        <input type="text" name="token" />
+      </label>
+      <button class="btn" type="submit">Issue QR Token</button>
+    </form>
+  </article>
+
+  <article class="panel">
+    <h2>Campaigns</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Device</th>
+          <th>Token</th>
+          <th>LP</th>
+          <th>Active</th>
+          <th>URL</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in campaigns %}
+        <tr>
+          <td>{{ c.id }}</td>
+          <td>{{ c.device_name }}</td>
+          <td class="small">{{ c.token }}</td>
+          <td>{{ c.lp_variant }}</td>
+          <td>{{ c.active }}</td>
+          <td class="small"><a href="{{ request.url_root.rstrip('/') }}/q/{{ c.token }}" target="_blank">open</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">No campaigns</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+
+<section class="panel">
+  <h2>Hourly Unlock Heatmap (UTC)</h2>
+  <div class="heatmap">
+    {% for hour, count in hourly_counts.items() %}
+      <div class="bar">
+        <span>{{ "%02d"|format(hour) }}</span>
+        <strong>{{ count }}</strong>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Recent Unlock Fail Logs</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>ts</th>
+        <th>device</th>
+        <th>reason</th>
+        <th>actor</th>
+        <th>request_id</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in error_logs %}
+      <tr>
+        <td>{{ row.ts }}</td>
+        <td>{{ row.device_name or "-" }}</td>
+        <td>{{ row.error_reason or "-" }}</td>
+        <td>{{ row.actor or "-" }}</td>
+        <td class="small">{{ row.request_id or "-" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">No unlock_fail logs</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<script>
+async function adminUnlock(deviceId) {
+  const result = document.getElementById("unlock-result");
+  result.textContent = "sending unlock command...";
+  const body = {
+    device_id: deviceId,
+    open_seconds: 6,
+    request_id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())
+  };
+  const res = await fetch("{{ url_for('admin_unlock') }}", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  result.textContent = JSON.stringify(data);
+}
+</script>
+{% endblock %}

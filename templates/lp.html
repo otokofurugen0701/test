@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartGomi Campaign</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fa; color: #0b1f2a; }
+    main { max-width: 680px; margin: 40px auto; background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 6px 20px rgba(0,0,0,0.08);}
+    h1 { margin-top: 0; }
+    .status { margin-top: 16px; padding: 12px; background: #eef4ff; border-radius: 8px; min-height: 24px; }
+    .warning { color: #a33; font-weight: 700; }
+    button { border: 0; background: #0059ff; color: #fff; border-radius: 8px; padding: 12px 16px; cursor: pointer; }
+    button.secondary { background: #2a2f38; margin-left: 8px; }
+    .muted { color: #6d7c8b; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>キャンペーン施策として無料で捨てられます</h1>
+    <p>この拠点では、現在キャンペーン中のため無料で利用できます。</p>
+    <ol>
+      <li>「解錠する」ボタンをタップします。</li>
+      <li>数秒でロックが解除されます。</li>
+      <li>ゴミを捨てたらフタを閉じてください。</li>
+    </ol>
+    <p class="muted">Location: {{ campaign.location_name }} / Device: {{ campaign.device_serial }}</p>
+    {% if not device_online %}
+    <p class="warning">現在端末がオフラインです。時間をおいて再試行してください。</p>
+    {% endif %}
+    <div>
+      <button id="unlock-btn">解錠する</button>
+      <button id="retry-btn" class="secondary">もう一度開ける</button>
+    </div>
+    <div id="status" class="status">待機中</div>
+    <p class="muted">失敗した場合は再試行してください。継続して失敗する場合は運用者に連絡してください。</p>
+  </main>
+
+  <script>
+    async function requestUnlock() {
+      const status = document.getElementById("status");
+      status.textContent = "解錠リクエスト送信中...";
+      const payload = {
+        request_id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+        open_seconds: {{ default_open_seconds }}
+      };
+      try {
+        const response = await fetch(window.location.pathname + "/unlock", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (data.ok) {
+          status.textContent = "解錠要求を受け付けました。端末がオンライン時に解錠されます。";
+        } else {
+          status.textContent = "失敗: " + (data.message || data.error || "unknown_error");
+        }
+      } catch (err) {
+        status.textContent = "通信エラー。再試行してください。";
+      }
+    }
+
+    document.getElementById("unlock-btn").addEventListener("click", requestUnlock);
+    document.getElementById("retry-btn").addEventListener("click", requestUnlock);
+  </script>
+</body>
+</html>
