@@ -21,6 +21,7 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.exceptions import HTTPException
 
 
 DEFAULT_OFFLINE_THRESHOLD_SECONDS = int(os.getenv("OFFLINE_THRESHOLD_MINUTES", "10")) * 60
@@ -31,6 +32,7 @@ MIN_UNLOCK_SECONDS = 3
 MAX_UNLOCK_SECONDS = 10
 DEFAULT_UNLOCK_SECONDS = 6
 DEFAULT_UNLOCK_COOLDOWN_SECONDS = 20
+MAX_REQUEST_ID_LENGTH = 128
 
 
 app = Flask(__name__)
@@ -88,9 +90,11 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def get_db() -> sqlite3.Connection:
     if "db" not in g:
-        db = sqlite3.connect(app.config["DATABASE"])
+        db = sqlite3.connect(app.config["DATABASE"], timeout=5.0)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys = ON;")
+        db.execute("PRAGMA busy_timeout = 5000;")
+        db.execute("PRAGMA journal_mode = WAL;")
         g.db = db
     return g.db
 
@@ -106,6 +110,62 @@ def ensure_session_id() -> str:
     if "sid" not in session:
         session["sid"] = str(uuid.uuid4())
     return session["sid"]
+
+
+def request_payload() -> dict:
+    if request.is_json:
+        payload = request.get_json(silent=True)
+        return payload if isinstance(payload, dict) else {}
+    if request.form:
+        return request.form.to_dict(flat=True)
+    return {}
+
+
+def parse_optional_int(raw_value: str | None):
+    if raw_value is None:
+        return None
+    normalized = str(raw_value).strip()
+    if normalized == "":
+        return None
+    try:
+        return int(normalized)
+    except ValueError:
+        return None
+
+
+def normalize_request_id(raw: str | None) -> str:
+    if raw:
+        normalized = str(raw).strip()
+        if normalized:
+            return normalized[:MAX_REQUEST_ID_LENGTH]
+    return str(uuid.uuid4())
+
+
+def is_api_like_request() -> bool:
+    if request.path.startswith("/device/"):
+        return True
+    if request.path == "/admin/unlock":
+        return True
+    if request.path.startswith("/q/") and request.method != "GET":
+        return True
+    if request.path == "/health":
+        return True
+    if request.is_json:
+        return True
+    accept = request.headers.get("Accept", "")
+    return "application/json" in accept.lower()
+
+
+def error_response(status_code: int, error_code: str, message: str):
+    payload = {"ok": False, "error": error_code, "message": message}
+    if is_api_like_request():
+        return jsonify(payload), status_code
+    return render_template(
+        "error.html",
+        status_code=status_code,
+        title=error_code.replace("_", " ").title(),
+        message=message,
+    ), status_code
 
 
 def get_current_admin():
@@ -691,9 +751,30 @@ def before_each_request():
     ensure_session_id()
 
 
+@app.errorhandler(404)
+def handle_404(_error):
+    return error_response(404, "not_found", "Requested resource was not found.")
+
+
+@app.errorhandler(Exception)
+def handle_exception(error):
+    if isinstance(error, HTTPException):
+        return error_response(error.code or 500, error.name.lower().replace(" ", "_"), error.description)
+    db = g.get("db")
+    if db is not None:
+        db.rollback()
+    app.logger.exception("Unhandled exception: %s", error)
+    return error_response(500, "internal_server_error", "An unexpected error occurred.")
+
+
 @app.route("/health")
 def health():
     return jsonify({"ok": True, "server_time": to_iso(utc_now())})
+
+
+@app.get("/favicon.ico")
+def favicon():
+    return "", 204
 
 
 @app.route("/")
@@ -782,7 +863,8 @@ def create_device():
         max_value=300,
     )
 
-    if not name or not serial or not location_id:
+    location_id_value = parse_optional_int(location_id)
+    if not name or not serial or location_id_value is None:
         flash("name / serial / location_id are required", "error")
         return redirect(url_for("locations_page"))
 
@@ -795,7 +877,7 @@ def create_device():
                 cooldown_seconds, created_at
             ) VALUES (?, ?, ?, 'offline', ?, ?, ?, ?)
             """,
-            (name, serial, int(location_id), fw_version, api_key, cooldown_seconds, to_iso(utc_now())),
+            (name, serial, location_id_value, fw_version, api_key, cooldown_seconds, to_iso(utc_now())),
         )
     except sqlite3.IntegrityError as exc:
         flash(f"Device creation failed: {exc}", "error")
@@ -806,11 +888,11 @@ def create_device():
         event_type="admin_action",
         actor=f"admin:{admin['username']}",
         success=True,
-        meta={"action": "create_device", "serial": serial, "location_id": int(location_id)},
+        meta={"action": "create_device", "serial": serial, "location_id": location_id_value},
     )
     db.commit()
     flash(f"Device created. API key: {api_key}", "ok")
-    return redirect(url_for("location_detail", location_id=int(location_id)))
+    return redirect(url_for("location_detail", location_id=location_id_value))
 
 
 @app.post("/admin/campaigns")
@@ -821,7 +903,9 @@ def create_campaign():
     token = request.form.get("token", "").strip() or secrets.token_urlsafe(18)
     lp_variant = request.form.get("lp_variant", "A").strip() or "A"
 
-    if not location_id or not device_id:
+    location_id_value = parse_optional_int(location_id)
+    device_id_value = parse_optional_int(device_id)
+    if location_id_value is None or device_id_value is None:
         flash("location_id and device_id are required", "error")
         return redirect(url_for("locations_page"))
 
@@ -832,22 +916,22 @@ def create_campaign():
             INSERT INTO campaigns (location_id, device_id, token, lp_variant, active, created_at)
             VALUES (?, ?, ?, ?, 1, ?)
             """,
-            (int(location_id), int(device_id), token, lp_variant, to_iso(utc_now())),
+            (location_id_value, device_id_value, token, lp_variant, to_iso(utc_now())),
         )
     except sqlite3.IntegrityError as exc:
         flash(f"Campaign creation failed: {exc}", "error")
-        return redirect(url_for("location_detail", location_id=int(location_id)))
+        return redirect(url_for("location_detail", location_id=location_id_value))
 
     admin = get_current_admin()
     append_event(
         event_type="admin_action",
         actor=f"admin:{admin['username']}",
         success=True,
-        meta={"action": "create_campaign", "location_id": int(location_id), "device_id": int(device_id), "token": token},
+        meta={"action": "create_campaign", "location_id": location_id_value, "device_id": device_id_value, "token": token},
     )
     db.commit()
     flash("Campaign token issued", "ok")
-    return redirect(url_for("location_detail", location_id=int(location_id)))
+    return redirect(url_for("location_detail", location_id=location_id_value))
 
 
 @app.route("/admin/locations/<int:location_id>")
@@ -856,7 +940,7 @@ def location_detail(location_id: int):
     db = get_db()
     location = db.execute("SELECT * FROM locations WHERE id = ?", (location_id,)).fetchone()
     if not location:
-        return "location not found", 404
+        return error_response(404, "location_not_found", "Location was not found.")
 
     devices = db.execute("SELECT * FROM devices WHERE location_id = ? ORDER BY id ASC", (location_id,)).fetchall()
     campaigns = db.execute(
@@ -974,12 +1058,21 @@ def logs_page():
         flash("Invalid date format", "error")
         return redirect(url_for("logs_page"))
 
+    location_id_value = parse_optional_int(location_id)
+    device_id_value = parse_optional_int(device_id)
+    if location_id and location_id_value is None:
+        flash("Invalid location id", "error")
+        return redirect(url_for("logs_page"))
+    if device_id and device_id_value is None:
+        flash("Invalid device id", "error")
+        return redirect(url_for("logs_page"))
+
     filters = {
         "from_ts": from_ts,
         "to_ts": to_ts,
         "event_type": event_type or None,
-        "location_id": int(location_id) if location_id else None,
-        "device_id": int(device_id) if device_id else None,
+        "location_id": location_id_value,
+        "device_id": device_id_value,
     }
     rows = query_event_logs(filters)
 
@@ -1051,9 +1144,8 @@ def logs_page():
 @admin_required
 def admin_unlock():
     admin = get_current_admin()
-    payload = request.get_json(silent=True) if request.is_json else request.form
-    payload = payload or {}
-    request_id = payload.get("request_id") or request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    payload = request_payload()
+    request_id = normalize_request_id(payload.get("request_id") or request.headers.get("X-Request-ID"))
     endpoint = "admin_unlock"
     cached = get_idempotent_response(endpoint, request_id)
     if cached:
@@ -1164,10 +1256,11 @@ def admin_unlock():
 @device_auth_required
 def device_heartbeat():
     device = g.device
-    payload = request.get_json(silent=True) or {}
+    payload = request_payload()
     request_id = payload.get("request_id") or request.headers.get("X-Request-ID")
     if not request_id:
         return jsonify({"ok": False, "error": "missing_request_id"}), 400
+    request_id = normalize_request_id(request_id)
 
     endpoint = "device_heartbeat"
     cached = get_idempotent_response(endpoint, request_id)
@@ -1239,28 +1332,36 @@ def device_heartbeat():
 @device_auth_required
 def device_unlock_result():
     device = g.device
-    payload = request.get_json(silent=True) or {}
+    payload = request_payload()
     request_id = payload.get("request_id") or request.headers.get("X-Request-ID")
     if not request_id:
         return jsonify({"ok": False, "error": "missing_request_id"}), 400
+    request_id = normalize_request_id(request_id)
     endpoint = "device_unlock_result"
     cached = get_idempotent_response(endpoint, request_id)
     if cached:
         body, status_code = cached
         return jsonify(body), status_code
 
-    command_id = payload.get("command_id")
+    command_id_raw = payload.get("command_id")
     command_request_id = payload.get("command_request_id")
     success = bool(payload.get("success", False))
     error_reason = payload.get("error_reason")
     open_seconds = clamp_open_seconds(payload.get("open_seconds", DEFAULT_UNLOCK_SECONDS))
+    command_id = parse_optional_int(command_id_raw)
+    if command_id_raw and command_id is None:
+        response = {"ok": False, "error": "invalid_command_id"}
+        status_code = 400
+        store_idempotent_response(endpoint, request_id, response, status_code)
+        get_db().commit()
+        return jsonify(response), status_code
 
     db = get_db()
     command = None
     if command_id:
         command = db.execute(
             "SELECT * FROM unlock_commands WHERE id = ? AND device_id = ?",
-            (int(command_id), device["id"]),
+            (command_id, device["id"]),
         ).fetchone()
     if not command and command_request_id:
         command = db.execute(
@@ -1337,7 +1438,7 @@ def campaign_landing(campaign_token: str):
         (campaign_token,),
     ).fetchone()
     if not row:
-        return "campaign not found", 404
+        return error_response(404, "campaign_not_found", "Campaign token is invalid.")
 
     sid = ensure_session_id()
     append_event(
@@ -1383,9 +1484,8 @@ def campaign_unlock(campaign_token: str):
     if not row:
         return jsonify({"ok": False, "error": "campaign_not_found"}), 404
 
-    payload = request.get_json(silent=True) if request.is_json else request.form
-    payload = payload or {}
-    request_id = payload.get("request_id") or request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    payload = request_payload()
+    request_id = normalize_request_id(payload.get("request_id") or request.headers.get("X-Request-ID"))
     endpoint = "campaign_unlock"
     cached = get_idempotent_response(endpoint, request_id)
     if cached:
@@ -1518,7 +1618,7 @@ def patrol_checklist(location_id: int):
     db = get_db()
     location = db.execute("SELECT * FROM locations WHERE id = ?", (location_id,)).fetchone()
     if not location:
-        return "location not found", 404
+        return error_response(404, "location_not_found", "Location was not found.")
     checklist = [
         "Power and waterproof box status",
         "Physical jam or trash overflow",

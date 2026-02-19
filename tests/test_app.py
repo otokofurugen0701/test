@@ -21,6 +21,13 @@ class SmartGomiAppTest(unittest.TestCase):
     def setUp(self):
         self.client = smart_app.app.test_client()
 
+    def login(self):
+        return self.client.post(
+            "/admin/login",
+            data={"username": "admin", "password": "admin1234"},
+            follow_redirects=False,
+        )
+
     def test_health(self):
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
@@ -32,11 +39,7 @@ class SmartGomiAppTest(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_admin_login(self):
-        response = self.client.post(
-            "/admin/login",
-            data={"username": "admin", "password": "admin1234"},
-            follow_redirects=False,
-        )
+        response = self.login()
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/dashboard", response.headers["Location"])
 
@@ -92,6 +95,27 @@ class SmartGomiAppTest(unittest.TestCase):
                 "SELECT COUNT(*) AS cnt FROM event_logs WHERE event_type = 'unlock_success'"
             ).fetchone()["cnt"]
             self.assertGreaterEqual(success_count, 1)
+
+    def test_invalid_command_id_does_not_crash(self):
+        with smart_app.app.app_context():
+            db = smart_app.get_db()
+            device = db.execute("SELECT api_key FROM devices ORDER BY id ASC LIMIT 1").fetchone()
+            api_key = device["api_key"]
+
+        response = self.client.post(
+            "/device/unlock_result",
+            headers={"X-Device-Key": api_key},
+            json={"request_id": "bad-command-id", "command_id": "abc", "success": False},
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.get_json()
+        self.assertEqual(body["error"], "invalid_command_id")
+
+    def test_invalid_logs_filter_does_not_500(self):
+        login_response = self.login()
+        self.assertEqual(login_response.status_code, 302)
+        response = self.client.get("/admin/logs?device_id=abc", follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
 
 
 if __name__ == "__main__":
