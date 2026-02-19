@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Patrol Checklist{% endblock %}
+{% block content %}
+<h1>Patrol Checklist: {{ location.name }}</h1>
+<section class="panel">
+  <ul>
+    {% for item in checklist %}
+      <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+  <p class="muted">Share this page URL with field operators for on-site recovery flow.</p>
+</section>
+{% endblock %}

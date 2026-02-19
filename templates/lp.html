@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>SmartGomi</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: rgba(255, 255, 255, 0.88);
+      --text: #0f1724;
+      --muted: #607086;
+      --primary: #0a84ff;
+      --primary-dark: #005dd1;
+      --line: #d8e2ef;
+      --success-bg: #e8f7ed;
+      --success-text: #156934;
+      --error-bg: #fdecec;
+      --error-text: #a12727;
+      --info-bg: #edf5ff;
+      --info-text: #0d4ba9;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 10% 10%, #ffffff 0%, #eff4fb 45%, #eaf0f8 100%);
+      display: grid;
+      place-items: center;
+      padding: 20px 14px calc(20px + env(safe-area-inset-bottom));
+    }
+    .shell {
+      width: 100%;
+      max-width: 520px;
+      border: 1px solid rgba(216, 226, 239, 0.9);
+      background: var(--card);
+      backdrop-filter: blur(12px);
+      border-radius: 28px;
+      padding: 20px 18px;
+      box-shadow: 0 24px 60px rgba(15, 23, 36, 0.12);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #eaf3ff;
+      color: #1459b6;
+    }
+    .badge.offline {
+      background: #fdeaea;
+      color: #9a2424;
+    }
+    h1 {
+      margin: 4px 0 8px;
+      font-size: 30px;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .hero {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(160deg, #fafdff 0%, #f3f8ff 100%);
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+    .steps {
+      margin: 0;
+      padding-left: 18px;
+      color: #27374d;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 10px 0 0;
+      word-break: break-word;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 16px 0 10px;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.12s ease, opacity 0.12s ease;
+    }
+    button:active { transform: scale(0.98); }
+    button[disabled] { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary {
+      background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #fff;
+    }
+    .btn-secondary {
+      background: #fff;
+      border: 1px solid var(--line);
+      color: #233449;
+    }
+    .status {
+      border-radius: 14px;
+      padding: 11px 12px;
+      font-size: 14px;
+      background: var(--info-bg);
+      color: var(--info-text);
+      min-height: 43px;
+      display: flex;
+      align-items: center;
+    }
+    .status.success { background: var(--success-bg); color: var(--success-text); }
+    .status.error { background: var(--error-bg); color: var(--error-text); }
+    .help {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    @media (max-width: 420px) {
+      .controls { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="header">
+      <span class="badge">無料キャンペーン中</span>
+      {% if not device_online %}
+      <span class="badge offline">現在オフライン</span>
+      {% endif %}
+    </div>
+
+    <h1>無料で捨てられます</h1>
+    <p class="sub">タップ1回で解錠をリクエストします。通信が安定していれば数秒で開きます。</p>
+
+    <section class="hero" aria-label="利用手順">
+      <svg viewBox="0 0 380 130" width="100%" height="auto" role="img" aria-label="SmartGomi illustration">
+        <defs>
+          <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#b7dcff"/>
+            <stop offset="100%" stop-color="#7fb6ff"/>
+          </linearGradient>
+        </defs>
+        <rect x="0" y="0" width="380" height="130" rx="18" fill="url(#g)" opacity="0.18"/>
+        <circle cx="56" cy="65" r="36" fill="#ffffff" opacity="0.85"/>
+        <path d="M48 52h16l-2 8h-12zM45 61h22l-1.8 28c-.2 3.2-2.9 5.7-6.1 5.7h-6.2c-3.2 0-5.9-2.5-6.1-5.7z" fill="#0a84ff"/>
+        <rect x="106" y="42" width="220" height="14" rx="7" fill="#ffffff" opacity="0.9"/>
+        <rect x="106" y="64" width="196" height="12" rx="6" fill="#ffffff" opacity="0.8"/>
+        <rect x="106" y="84" width="164" height="10" rx="5" fill="#ffffff" opacity="0.7"/>
+      </svg>
+      <ol class="steps">
+        <li>「解錠する」をタップ</li>
+        <li>ロック解除を待つ（目安1〜2秒）</li>
+        <li>投入後にフタを閉じる</li>
+      </ol>
+      <p class="meta">Location: {{ campaign.location_name }} / Device: {{ campaign.device_serial }}</p>
+    </section>
+
+    <div class="controls">
+      <button id="unlock-btn" class="btn-primary" type="button">解錠する</button>
+      <button id="retry-btn" class="btn-secondary" type="button">もう一度試す</button>
+    </div>
+
+    <div id="status" class="status" aria-live="polite">準備完了。ボタンを押してください。</div>
+    <p class="help">連続で失敗する場合は、少し時間をおいて再試行してください。</p>
+  </main>
+
+  <script>
+    const statusElm = document.getElementById("status");
+    const unlockBtn = document.getElementById("unlock-btn");
+    const retryBtn = document.getElementById("retry-btn");
+    let loading = false;
+
+    function setStatus(message, kind) {
+      statusElm.textContent = message;
+      statusElm.className = "status";
+      if (kind === "success") statusElm.classList.add("success");
+      if (kind === "error") statusElm.classList.add("error");
+    }
+
+    function setLoading(value) {
+      loading = value;
+      unlockBtn.disabled = value;
+      retryBtn.disabled = value;
+    }
+
+    function userMessage(data, fallback) {
+      const map = {
+        campaign_not_found: "このQRは現在利用できません。",
+        device_offline: "現在混み合っています。少し待って再試行してください。",
+        cooldown_active: "連続操作中です。20秒ほど待って再試行してください。",
+        session_rate_limited: "操作回数が多いため、少し待ってください。"
+      };
+      if (data && data.error && map[data.error]) return map[data.error];
+      return (data && (data.message || data.error)) || fallback;
+    }
+
+    async function requestUnlock() {
+      if (loading) return;
+      setLoading(true);
+      setStatus("通信中です...", "info");
+
+      const payload = {
+        request_id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+        open_seconds: {{ default_open_seconds }}
+      };
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      try {
+        const response = await fetch(window.location.pathname + "/unlock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (_e) {
+          data = {};
+        }
+
+        if (response.ok && data.ok) {
+          setStatus("解錠要求を受け付けました。開かない場合は再試行してください。", "success");
+        } else {
+          setStatus(userMessage(data, "解錠に失敗しました。再試行してください。"), "error");
+        }
+      } catch (_error) {
+        setStatus("通信エラーです。電波の良い場所で再試行してください。", "error");
+      } finally {
+        clearTimeout(timeoutId);
+        setLoading(false);
+      }
+    }
+
+    unlockBtn.addEventListener("click", requestUnlock);
+    retryBtn.addEventListener("click", requestUnlock);
+  </script>
+</body>
+</html>

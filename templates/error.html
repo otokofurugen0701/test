@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Error</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: #f3f6fb;
+      color: #12233a;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Arial, sans-serif;
+    }
+    .card {
+      width: 100%;
+      max-width: 560px;
+      background: #fff;
+      border-radius: 20px;
+      border: 1px solid #d8e2ef;
+      padding: 22px;
+      box-shadow: 0 18px 40px rgba(15, 23, 36, 0.08);
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    p { margin: 0 0 6px; color: #4f6078; }
+    .code {
+      margin-top: 10px;
+      display: inline-block;
+      border-radius: 999px;
+      border: 1px solid #cfd9e8;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: #294462;
+      background: #f7faff;
+    }
+    a {
+      margin-top: 14px;
+      display: inline-block;
+      color: #0a5ad8;
+      text-decoration: none;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    <span class="code">status {{ status_code }}</span>
+    <div>
+      <a href="/">トップへ戻る</a>
+    </div>
+  </main>
+</body>
+</html>

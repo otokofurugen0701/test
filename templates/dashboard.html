@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard (UTC day)</h1>
+<section class="grid cards">
+  <article class="card">
+    <h2>Unlock Success Today</h2>
+    <p class="value">{{ metrics.unlock_success_today }}</p>
+  </article>
+  <article class="card">
+    <h2>Failure Rate</h2>
+    <p class="value">{{ metrics.failure_rate }}%</p>
+  </article>
+  <article class="card">
+    <h2>Offline Locations</h2>
+    <p class="value">{{ metrics.offline_location_count }}</p>
+  </article>
+  <article class="card">
+    <h2>Offline Alerts</h2>
+    <p class="value">10m+: {{ metrics.alert_10m_count }} / 30m+: {{ metrics.alert_30m_count }}</p>
+  </article>
+</section>
+
+<section class="panel">
+  <h2>Anomaly Top (offline / fail-rate)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Location</th>
+        <th>Offline (sec)</th>
+        <th>Fail Rate (%)</th>
+        <th>Attempts</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in metrics.anomalies %}
+      <tr>
+        <td>{{ row.location_name }}</td>
+        <td>{{ row.offline_seconds }}</td>
+        <td>{{ row.fail_rate }}</td>
+        <td>{{ row.unlock_attempts }}</td>
+        <td><a href="{{ url_for('location_detail', location_id=row.location_id) }}">detail</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">No data</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

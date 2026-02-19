@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Locations{% endblock %}
+{% block content %}
+<h1>Locations</h1>
+
+<section class="panel">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Note</th>
+        <th>Devices</th>
+        <th>Online</th>
+        <th>Unlock Today</th>
+        <th>Last Seen</th>
+        <th>Offline (min)</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.note or "-" }}</td>
+        <td>{{ row.device_total }}</td>
+        <td>{{ row.online_count }}</td>
+        <td>{{ row.unlock_today }}</td>
+        <td>{{ row.last_seen_at }}</td>
+        <td>{{ row.offline_minutes }}</td>
+        <td><a href="{{ url_for('location_detail', location_id=row.id) }}">detail</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">No locations</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="grid two">
+  <article class="panel">
+    <h2>Create Location</h2>
+    <form method="post" action="{{ url_for('create_location') }}" class="form-col">
+      <label>
+        Name
+        <input type="text" name="name" required />
+      </label>
+      <label>
+        Note
+        <textarea name="note" rows="2"></textarea>
+      </label>
+      <label>
+        Geo(optional)
+        <input type="text" name="geo" />
+      </label>
+      <button class="btn" type="submit">Create</button>
+    </form>
+  </article>
+
+  <article class="panel">
+    <h2>Register Device</h2>
+    <form method="post" action="{{ url_for('create_device') }}" class="form-col">
+      <label>
+        Name
+        <input type="text" name="name" required />
+      </label>
+      <label>
+        Serial
+        <input type="text" name="serial" required />
+      </label>
+      <label>
+        Location
+        <select name="location_id" required>
+          {% for l in locations %}
+          <option value="{{ l.id }}">{{ l.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        FW Version
+        <input type="text" name="fw_version" value="0.1.0" />
+      </label>
+      <label>
+        API Key(optional, auto generated if empty)
+        <input type="text" name="api_key" />
+      </label>
+      <label>
+        Cooldown Seconds
+        <input type="number" name="cooldown_seconds" value="20" min="3" max="60" />
+      </label>
+      <button class="btn" type="submit">Register Device</button>
+    </form>
+  </article>
+</section>
+{% endblock %}
